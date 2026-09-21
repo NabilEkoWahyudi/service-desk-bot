@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Preview Form - IT Service Desk Bot PLN Batam</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #dce5eb;
+      font-family: Roboto, Arial, sans-serif;
+      font-size: 14px;
+      color: #263746;
+    }
+
+    .ph {
+      background: linear-gradient(135deg, #075578 0%, #0a7aab 100%);
+      color: #fff;
+      padding: 22px 32px 18px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    .ph h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .ph p {
+      margin: 5px 0 0;
+      font-size: 12.5px;
+      opacity: .82;
+    }
+
+    .tnav {
+      background: #064e6e;
+      display: flex;
+      padding: 0 24px;
+      overflow-x: auto;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    .tbtn {
+      padding: 12px 20px;
+      color: rgba(255, 255, 255, .72);
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 13px;
+      font-family: inherit;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      transition: all .18s;
+    }
+
+    .tbtn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
+    }
+
+    .tbtn.active {
+      color: #fff;
+      border-bottom-color: #5ecfff;
+      font-weight: 600;
+    }
+
+    .content {
+      padding: 26px 20px 40px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .pi {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border: 1px solid #c9d8e2;
+      border-left: 4px solid #075578;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 6px rgba(30, 63, 83, 0.06);
+    }
+
+    .badge {
+      background: #075578;
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 11px;
+      border-radius: 20px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.g {
+      background: #1a7a4a;
+    }
+
+    .badge.a {
+      background: #b06d00;
+    }
+
+    .badge.p {
+      background: #5e35b1;
+    }
+
+    .badge.t {
+      background: #00766c;
+    }
+
+    .pi p {
+      margin: 0;
+      font-size: 13px;
+      color: #39444b;
+    }
+
+    .arow {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    @media(max-width:640px) {
+      .tbtn {
+        padding: 10px 14px;
+        font-size: 12px;
+      }
+
+      .content {
+        padding: 16px 10px 30px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="ph">
+    <h1>Preview Form Description - IT Service Desk Bot PLN Batam</h1>
+    <p>Tampilan form yang dikirim ke ManageEngine ServiceDesk Plus &middot; Semua form pakai <b>inline style only</b>
+      (tidak ada CSS class)</p>
+  </div>
+  <nav class="tnav">
+    <button class="tbtn active" onclick="showTab('autorisasi',this)">&#128203; AUTORISASI</button>
+    <button class="tbtn" onclick="showTab('password',this)">&#128273; PASSWORD</button>
+    <button class="tbtn" onclick="showTab('keluhan',this)">&#128295; KELUHAN IT</button>
+    <button class="tbtn" onclick="showTab('vpn',this)">&#128274; AKSES VPN</button>
+    <button class="tbtn" onclick="showTab('approval',this)">&#9989; Pesan Approval (Atasan)</button>
+  </nav>
+  <div class="content">
+
+    <div class="panel active" id="p-autorisasi">
+      <div class="pi"><span class="badge">AUTORISASI</span>
+        <p>Formulir <b>Pembuatan atau Perubahan Otorisasi Aplikasi</b> &mdash; dikirim sebagai <code>description</code>
+          tiket ke ManageEngine. Memerlukan persetujuan atasan (approval flow).</p>
+      </div>
+      <div
+        style="width:100%;max-width:860px;margin:0 auto;font-family:Roboto,Arial,sans-serif;font-size:14px;color:#263746;">
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:18px;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.08);">
+          <colgroup>
+            <col style="width:18%;" />
+            <col style="width:64%;" />
+            <col style="width:18%;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td rowspan="2"
+                style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><span style="font-size:20px;">OPS<br />TI</span></p>
+              </td>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-bottom:1px solid rgba(255,255,255,0.25);border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:15px;letter-spacing:0.4px;">FORMULIR
+                    PERMINTAAN</b></p>
+              </td>
+              <td rowspan="2" style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;">
+                <p style="margin:0;line-height:1.5;"><img
+                    src="https://www.plnbatam.com/wp-content/themes/brightpln/img/main_logo.jpg" alt="Logo PLN Batam"
+                    width="80" height="50" style="display:block;margin:0 auto;object-fit:contain;" /></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:13px;letter-spacing:0.2px;">PEMBUATAN ATAU
+                    PERUBAHAN OTORISASI APLIKASI</b></p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.06);">
+          <colgroup>
+            <col style="width:230px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colspan="5"
+                style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><b>NAMA APLIKASI <span style="color:#d92d20;">*</span> : AMR</b>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5"
+                style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><b>Lokasi <span style="color:#d92d20;">*</span> :&nbsp;Divisi
+                    Infrastruktur TI</b></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nomor Induk Pegawai <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">8901234</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nama Lengkap <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">AD Ahya Ramadhan</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Jabatan <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Analis IT</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Phone/Ext/HP <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">088216710497</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Unit/Bidang/Bagian <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Divisi Infrastruktur TI</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">User Account <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">ad.fahyar</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nama Aplikasi <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4" style="padding:11px 14px;vertical-align:middle;color:#39444b;">
+                <p style="margin:0;line-height:1.5;">AMR</p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5"
+                style="padding:16px 18px;vertical-align:middle;background:#fff8e7;border-top:2px solid #e1b343;">
+                <p style="margin:0 0 8px 0;line-height:1.5;color:#6d4c00;font-weight:700;">Komitmen Pengguna:</p>
+                <p style="margin:0;color:#39444b;line-height:1.65;text-align:justify;">Dengan ini menyatakan bahwa saya
+                  akan menjaga kerahasiaan data dan akses yang diberikan kepada saya serta tidak akan mengalihkan hak
+                  akses tersebut kepada pihak lain tanpa izin. Saya berkomitmen untuk menggunakan sistem informasi dan
+                  teknologi di lingkungan PT PLN Batam dengan bertanggung jawab, menjaga keamanan kata sandi dan
+                  identitas yang diberikan kepada saya. Saya juga akan segera melaporkan setiap insiden atau potensi
+                  ancaman keamanan informasi kepada&nbsp;Unit Bisnis Infrastruktur Teknologi Informasi.</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="p-password">
+      <div class="pi"><span class="badge p">PASSWORD</span>
+        <p>Formulir <b>Permintaan Reset Password</b> &mdash; dikirim sebagai <code>description</code> tiket ke
+          ManageEngine. Baris category-specific: <b>Nama Aplikasi</b>.</p>
+      </div>
+      <div
+        style="width:100%;max-width:860px;margin:0 auto;font-family:Roboto,Arial,sans-serif;font-size:14px;color:#263746;">
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:18px;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.08);">
+          <colgroup>
+            <col style="width:18%;" />
+            <col style="width:64%;" />
+            <col style="width:18%;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td rowspan="2"
+                style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><span style="font-size:20px;">OPS<br />TI</span></p>
+              </td>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-bottom:1px solid rgba(255,255,255,0.25);border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:15px;letter-spacing:0.4px;">FORMULIR
+                    PERMINTAAN</b></p>
+              </td>
+              <td rowspan="2" style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;">
+                <p style="margin:0;line-height:1.5;"><img
+                    src="https://www.plnbatam.com/wp-content/themes/brightpln/img/main_logo.jpg" alt="Logo PLN Batam"
+                    width="80" height="50" style="display:block;margin:0 auto;object-fit:contain;" /></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:13px;letter-spacing:0.2px;">PERMINTAAN RESET
+                    PASSWORD</b></p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.06);">
+          <colgroup>
+            <col style="width:230px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colspan="5"
+                style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><b>NAMA APLIKASI <span style="color:#d92d20;">*</span> : SIMKEU</b>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5"
+                style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><b>Lokasi <span style="color:#d92d20;">*</span> :&nbsp;Divisi
+                    Keuangan</b></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nomor Induk Pegawai <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">7501234</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nama Lengkap <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Budi Santoso</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Jabatan <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Staf Keuangan</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Phone/Ext/HP <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">081234567890</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Unit/Bidang/Bagian <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Divisi Keuangan</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">User Account <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">budi.santoso</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nama Aplikasi <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4" style="padding:11px 14px;vertical-align:middle;color:#39444b;">
+                <p style="margin:0;line-height:1.5;">SIMKEU</p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5"
+                style="padding:16px 18px;vertical-align:middle;background:#fff8e7;border-top:2px solid #e1b343;">
+                <p style="margin:0 0 8px 0;line-height:1.5;color:#6d4c00;font-weight:700;">Komitmen Pengguna:</p>
+                <p style="margin:0;color:#39444b;line-height:1.65;text-align:justify;">Dengan ini menyatakan bahwa saya
+                  akan menjaga kerahasiaan data dan akses yang diberikan kepada saya serta tidak akan mengalihkan hak
+                  akses tersebut kepada pihak lain tanpa izin. Saya berkomitmen untuk menggunakan sistem informasi dan
+                  teknologi di lingkungan PT PLN Batam dengan bertanggung jawab, menjaga keamanan kata sandi dan
+                  identitas yang diberikan kepada saya. Saya juga akan segera melaporkan setiap insiden atau potensi
+                  ancaman keamanan informasi kepada&nbsp;Unit Bisnis Infrastruktur Teknologi Informasi.</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="p-keluhan">
+      <div class="pi"><span class="badge t">KELUHAN IT</span>
+        <p>Formulir <b>Permintaan/Keluhan IT</b> &mdash; dikirim sebagai <code>description</code> tiket ke ManageEngine.
+          Tidak ada header NAMA APLIKASI. Baris category-specific: <b>Keluhan yang Dialami</b>.</p>
+      </div>
+      <div
+        style="width:100%;max-width:860px;margin:0 auto;font-family:Roboto,Arial,sans-serif;font-size:14px;color:#263746;">
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:18px;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.08);">
+          <colgroup>
+            <col style="width:18%;" />
+            <col style="width:64%;" />
+            <col style="width:18%;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td rowspan="2"
+                style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><span style="font-size:20px;">OPS<br />TI</span></p>
+              </td>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-bottom:1px solid rgba(255,255,255,0.25);border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:15px;letter-spacing:0.4px;">FORMULIR
+                    PERMINTAAN</b></p>
+              </td>
+              <td rowspan="2" style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;">
+                <p style="margin:0;line-height:1.5;"><img
+                    src="https://www.plnbatam.com/wp-content/themes/brightpln/img/main_logo.jpg" alt="Logo PLN Batam"
+                    width="80" height="50" style="display:block;margin:0 auto;object-fit:contain;" /></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b
+                    style="font-size:13px;letter-spacing:0.2px;">PERMINTAAN/KELUHAN</b></p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.06);">
+          <colgroup>
+            <col style="width:230px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colspan="5"
+                style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><b>Lokasi <span style="color:#d92d20;">*</span> :&nbsp;Divisi
+                    Operasional</b></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nomor Induk Pegawai <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">6201234</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nama Lengkap <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Sari Wulandari</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Jabatan <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Supervisor Operasional</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Phone/Ext/HP <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">081298765432</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Unit/Bidang/Bagian <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Divisi Operasional</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">User Account <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">sari.wulandari</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Keluhan yang Dialami <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4" style="padding:11px 14px;vertical-align:middle;color:#39444b;">
+                <p style="margin:0;line-height:1.5;">Komputer tidak bisa terhubung ke jaringan lokal sejak pagi. Sudah
+                  dicoba restart namun masih belum berhasil.</p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5"
+                style="padding:16px 18px;vertical-align:middle;background:#fff8e7;border-top:2px solid #e1b343;">
+                <p style="margin:0 0 8px 0;line-height:1.5;color:#6d4c00;font-weight:700;">Komitmen Pengguna:</p>
+                <p style="margin:0;color:#39444b;line-height:1.65;text-align:justify;">Dengan ini menyatakan bahwa saya
+                  akan menjaga kerahasiaan data dan akses yang diberikan kepada saya serta tidak akan mengalihkan hak
+                  akses tersebut kepada pihak lain tanpa izin. Saya berkomitmen untuk menggunakan sistem informasi dan
+                  teknologi di lingkungan PT PLN Batam dengan bertanggung jawab, menjaga keamanan kata sandi dan
+                  identitas yang diberikan kepada saya. Saya juga akan segera melaporkan setiap insiden atau potensi
+                  ancaman keamanan informasi kepada&nbsp;Unit Bisnis Infrastruktur Teknologi Informasi.</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="p-vpn">
+      <div class="pi"><span class="badge a">AKSES VPN</span>
+        <p>Formulir <b>Permintaan Akses VPN</b> &mdash; dikirim sebagai <code>description</code> tiket ke ManageEngine.
+          Tidak ada header NAMA APLIKASI. Baris category-specific: <b>Alasan Akses VPN</b>.</p>
+      </div>
+      <div
+        style="width:100%;max-width:860px;margin:0 auto;font-family:Roboto,Arial,sans-serif;font-size:14px;color:#263746;">
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:18px;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.08);">
+          <colgroup>
+            <col style="width:18%;" />
+            <col style="width:64%;" />
+            <col style="width:18%;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td rowspan="2"
+                style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><span style="font-size:20px;">OPS<br />TI</span></p>
+              </td>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-bottom:1px solid rgba(255,255,255,0.25);border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:15px;letter-spacing:0.4px;">FORMULIR
+                    PERMINTAAN</b></p>
+              </td>
+              <td rowspan="2" style="background:#f7fafb;text-align:center;padding:14px 16px;vertical-align:middle;">
+                <p style="margin:0;line-height:1.5;"><img
+                    src="https://www.plnbatam.com/wp-content/themes/brightpln/img/main_logo.jpg" alt="Logo PLN Batam"
+                    width="80" height="50" style="display:block;margin:0 auto;object-fit:contain;" /></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="background:#075578;color:#fff;text-align:center;padding:14px 16px;vertical-align:middle;border-right:1px solid rgba(255,255,255,0.15);">
+                <p style="margin:0;line-height:1.5;"><b style="font-size:13px;letter-spacing:0.2px;">AKSES VPN</b></p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <table cellpadding="0" cellspacing="0" border="0"
+          style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d6e0e7;border-radius:14px;background:#fff;box-shadow:0 5px 18px rgba(30,63,83,0.06);">
+          <colgroup>
+            <col style="width:230px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+            <col style="width:157.5px;" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colspan="5"
+                style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;"><b>Lokasi <span style="color:#d92d20;">*</span> :&nbsp;Divisi
+                    Teknologi Informasi</b></p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nomor Induk Pegawai <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">5501234</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Nama Lengkap <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Rizky Firmansyah</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Jabatan <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Network Engineer</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Phone/Ext/HP <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">082199887766</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Unit/Bidang/Bagian <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Divisi Teknologi Informasi</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">User Account <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4"
+                style="padding:11px 14px;vertical-align:middle;color:#39444b;border-bottom:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">rizky.firmansyah</p>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;">
+                <p style="margin:0;line-height:1.5;">Alasan Akses VPN <span style="color:#d92d20;">*</span> :</p>
+              </td>
+              <td colspan="4" style="padding:11px 14px;vertical-align:middle;color:#39444b;">
+                <p style="margin:0;line-height:1.5;">Bekerja dari luar kantor (WFH) dan memerlukan akses ke sistem
+                  internal PLN Batam untuk monitoring jaringan secara remote.</p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5"
+                style="padding:16px 18px;vertical-align:middle;background:#fff8e7;border-top:2px solid #e1b343;">
+                <p style="margin:0 0 8px 0;line-height:1.5;color:#6d4c00;font-weight:700;">Komitmen Pengguna:</p>
+                <p style="margin:0;color:#39444b;line-height:1.65;text-align:justify;">Dengan ini menyatakan bahwa saya
+                  akan menjaga kerahasiaan data dan akses yang diberikan kepada saya serta tidak akan mengalihkan hak
+                  akses tersebut kepada pihak lain tanpa izin. Saya berkomitmen untuk menggunakan sistem informasi dan
+                  teknologi di lingkungan PT PLN Batam dengan bertanggung jawab, menjaga keamanan kata sandi dan
+                  identitas yang diberikan kepada saya. Saya juga akan segera melaporkan setiap insiden atau potensi
+                  ancaman keamanan informasi kepada&nbsp;Unit Bisnis Infrastruktur Teknologi Informasi.</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="p-approval">
+      <div class="pi"><span class="badge g">APPROVAL</span>
+        <p>Contoh pesan <b>WhatsApp</b> yang dikirim bot ke <b>atasan pegawai</b> saat tiket AUTORISASI dibuat. Atasan
+          membalas <b>APPROVE</b> atau <b>REJECT</b>.</p>
+      </div>
+      <div class="arow">
+        <div>
+          <p style="margin:0 0 10px;font-size:13px;color:#555;font-weight:600;">Pesan ke Atasan (permintaan
+            APPROVE/REJECT):</p>
+          <div
+            style="background:#e9f5e1;border:1px solid #c3ddb3;border-radius:12px;padding:20px 22px;max-width:440px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;white-space:pre-wrap;box-shadow:0 3px 10px rgba(0,0,0,0.08);">
+            <div
+              style="font-size:12px;color:#888;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #d0e8c5;">
+              WhatsApp - IT Service Desk Bot - Dikirim otomatis</div><b>*[IT Service Desk PLN Batam - Permintaan
+              Persetujuan]*</b>
+
+            Terdapat permintaan *Pembuatan atau Perubahan Otorisasi Aplikasi* yang memerlukan persetujuan Anda:
+
+            *Nama Aplikasi* : AMR
+            *Nomor Induk Pegawai* : 8901234
+            *Nama Lengkap* : AD Ahya Ramadhan
+            *User Account* : ad.fahyar
+            *Unit/Bidang/Bagian* : Divisi Infrastruktur TI
+            *Jabatan* : Analis IT
+            *No. Tiket* : 12345
+
+            Balas dengan:
+            *APPROVE* - untuk menyetujui
+            *REJECT* - untuk menolak
+
+            <i>Pesan ini dikirim otomatis oleh IT Service Desk Bot PLN Batam</i>
+          </div>
+        </div>
+        <div>
+          <p style="margin:0 0 10px;font-size:13px;color:#555;font-weight:600;">Notifikasi ke Pegawai (setelah
+            DISETUJUI):</p>
+          <div
+            style="background:#e9f5e1;border:1px solid #c3ddb3;border-radius:12px;padding:20px 22px;max-width:440px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;white-space:pre-wrap;box-shadow:0 3px 10px rgba(0,0,0,0.08);">
+            <div
+              style="font-size:12px;color:#888;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #d0e8c5;">
+              WhatsApp - IT Service Desk Bot - Dikirim otomatis</div><b>*Request Pembuatan atau Perubahan Otorisasi
+              Aplikasi Anda Telah DISETUJUI*</b>
+
+            Permintaan Anda telah disetujui oleh atasan dan akan segera diproses oleh Tim IT.
+
+            *Nama Pegawai* : AD Ahya Ramadhan
+            *Nomor Induk Pegawai* : 8901234
+            *User Account* : ad.fahyar
+            *Unit/Bidang/Bagian* : Divisi Infrastruktur TI
+            *Jabatan* : Analis IT
+            *No. Tiket* : 12345
+            *Judul* : Pembuatan atau Perubahan Otorisasi Aplikasi
+
+            <i>Ketik *menu* jika ingin mengajukan request baru.</i>
+          </div>
+        </div>
+        <div>
+          <p style="margin:0 0 10px;font-size:13px;color:#555;font-weight:600;">Notifikasi ke Pegawai (setelah DITOLAK):
+          </p>
+          <div
+            style="background:#e9f5e1;border:1px solid #c3ddb3;border-radius:12px;padding:20px 22px;max-width:440px;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;white-space:pre-wrap;box-shadow:0 3px 10px rgba(0,0,0,0.08);">
+            <div
+              style="font-size:12px;color:#888;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #d0e8c5;">
+              WhatsApp - IT Service Desk Bot - Dikirim otomatis</div><b>*Request Pembuatan atau Perubahan Otorisasi
+              Aplikasi Anda Telah DITOLAK*</b>
+
+            Permintaan Anda ditolak oleh atasan.
+
+            *Nama Pegawai* : AD Ahya Ramadhan
+            *Nomor Induk Pegawai* : 8901234
+            *User Account* : ad.fahyar
+            *Unit/Bidang/Bagian* : Divisi Infrastruktur TI
+            *Jabatan* : Analis IT
+            *No. Tiket* : 12345
+            *Judul* : Pembuatan atau Perubahan Otorisasi Aplikasi
+
+            <i>Ketik *menu* jika ingin mengajukan request baru.</i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script>
+    function showTab(name, btn) {
+      document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+      document.getElementById('p-' + name).classList.add('active');
+      document.querySelectorAll('.tbtn').forEach(function (b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+    }
+  </script>
+</body>
+
+</html>

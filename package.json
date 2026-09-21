@@ -1,0 +1,34 @@
+{
+  "name": "it-help-desk-bot",
+  "version": "1.0.0",
+  "description": "IT Help Desk Bot - PLN Batam (WhatsApp Conversational Form)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --max-old-space-size=512 index.js",
+    "dev": "node --max-old-space-size=512 --watch-path=./src --watch-path=index.js index.js",
+    "test": "node tests/unit.validators.test.js && node tests/unit.session.test.js && node tests/smoke.test.js",
+    "test:validators": "node tests/unit.validators.test.js",
+    "test:session": "node tests/unit.session.test.js",
+    "test:smoke": "node tests/smoke.test.js"
+  },
+  "keywords": [
+    "pln",
+    "whatsapp",
+    "bot",
+    "help-desk"
+  ],
+  "author": "PLN Batam IT",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.15.2",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "puppeteer": "^24.42.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.1-alpha.4",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  }
+}

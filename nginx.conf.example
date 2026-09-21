@@ -1,0 +1,63 @@
+# ──────────────────────────────────────────────────────────────
+# NGINX CONFIGURATION EXAMPLE — IT Service Desk Bot PLN Batam
+# Item 3: Setup HTTPS dengan NGINX sebagai reverse proxy
+# ──────────────────────────────────────────────────────────────
+#
+# CARA PENGGUNAAN:
+# 1. Install NGINX: sudo apt install nginx
+# 2. Install Certbot: sudo apt install certbot python3-certbot-nginx
+# 3. Dapatkan SSL certificate: sudo certbot --nginx -d yourdomain.plnbatam.com
+# 4. Copy konfigurasi ini ke: /etc/nginx/sites-available/helpdesk-bot
+# 5. Enable: sudo ln -s /etc/nginx/sites-available/helpdesk-bot /etc/nginx/sites-enabled/
+# 6. Test: sudo nginx -t
+# 7. Reload: sudo systemctl reload nginx
+# ──────────────────────────────────────────────────────────────
+
+# Redirect HTTP → HTTPS
+server {
+    listen 80;
+    server_name bot.plnbatam.com;   # Ganti dengan domain/subdomain kamu
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Server
+server {
+    listen 443 ssl;
+    server_name bot.plnbatam.com;   # Ganti dengan domain/subdomain kamu
+
+    # SSL Certificate (otomatis diisi oleh Certbot)
+    ssl_certificate     /etc/letsencrypt/live/bot.plnbatam.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bot.plnbatam.com/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # Rate Limiting (NGINX level) — max 10 request/menit per IP
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/m;
+    limit_req zone=api burst=5 nodelay;
+
+    # Proxy ke Node.js Bot (berjalan di port 3000)
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Hanya izinkan endpoint /health dan /webhook/reply dari luar
+    # Endpoint lain diblokir jika perlu (uncomment untuk keamanan ekstra)
+    # location ~* ^/((?!health|webhook).)*$ {
+    #     deny all;
+    # }
+}
