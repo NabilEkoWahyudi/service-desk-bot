@@ -23,21 +23,17 @@ function buildAllFieldsPrompt(config) {
 
   // Contoh generik per tipe field
   const exampleMap = {
-    requester:         'ahmad.fauzi@plnbatam.com',
-    nama_aplikasi:     'SIMKEU',
-    keluhan:           'Printer di ruangan IT tidak mau menarik kertas sejak pagi',
-    alasan:            'Akses dari rumah karena sedang WFH dan butuh server intranet'
+    requester: 'ahmad.fauzi@plnbatam.com',
+    nama_aplikasi: 'SIMKEU',
+    username_aplikasi: 'User123',
+    keluhan: 'Printer di ruangan IT tidak mau menarik kertas sejak pagi',
+    alasan: 'Akses dari rumah karena sedang WFH dan butuh server intranet'
   };
-
-  const exampleLines = config.fields.map((key, i) => {
-    return `${i + 1}. ${exampleMap[key] || '-'}`;
-  });
 
   return (
     `Silakan isi data berikut dalam *satu pesan* dengan format:\n\n` +
-    fieldLines.join('\n') + '\n\n' +
-    `*Contoh balasan:*\n` +
-    exampleLines.join('\n')
+    fieldLines.join('\n') +
+    `\n\nDapat mengupload media foto (png/jpg)`
   );
 }
 
@@ -47,12 +43,13 @@ function buildAllFieldsPrompt(config) {
  * Mendukung variasi format:
  *   "1. value"   "1) value"   "1: value"   "1- value"
  *
- * @param {string} text          - Teks input user
- * @param {number} expectedCount - Jumlah field yang diharapkan
+ * @param {string}  text          - Teks input user
+ * @param {number}  expectedCount - Jumlah field yang diharapkan
+ * @param {Set}     nullableIndices - Indeks field yang boleh kosong (opsional)
  * @returns {string[]|null}      - Array nilai (index 0..n-1), atau null jika
- *                                 format tidak dikenali / ada field kosong
+ *                                 format tidak dikenali / field wajib kosong
  */
-function parseNumberedList(text, expectedCount) {
+function parseNumberedList(text, expectedCount, nullableIndices = new Set()) {
   const entries = {};
   const lines = text.split('\n');
 
@@ -70,11 +67,19 @@ function parseNumberedList(text, expectedCount) {
     }
   }
 
-  // Pastikan semua field tersedia
+  // Pastikan semua field tersedia — field nullable boleh kosong
   const result = [];
   for (let i = 0; i < expectedCount; i++) {
-    if (!entries[i] || !entries[i].trim()) return null;
-    result.push(entries[i].trim());
+    const val = entries[i];
+    if (!val || !val.trim()) {
+      if (nullableIndices.has(i)) {
+        result.push('');   // field opsional — boleh kosong
+      } else {
+        return null;       // field wajib — gagal parse
+      }
+    } else {
+      result.push(val.trim());
+    }
   }
 
   return result;
@@ -96,6 +101,30 @@ function validateField(fieldKey, value) {
   if (fieldKey === 'nama_aplikasi') {
     if (trimmed.length > 100) {
       return { valid: false, message: 'Nama aplikasi terlalu panjang (maks 100 karakter).' };
+    }
+  }
+
+  if (fieldKey === 'username_aplikasi') {
+    if (trimmed.length > 100) {
+      return { valid: false, message: 'Username aplikasi terlalu panjang (maks 100 karakter).' };
+    }
+  }
+
+  // role_assign, role_hapus, tgl_awal, tgl_akhir bersifat opsional — jika kosong atau "-", selalu valid
+  if (fieldKey === 'role_assign' || fieldKey === 'role_hapus' || fieldKey === 'tgl_awal' || fieldKey === 'tgl_akhir') {
+    if (!trimmed || trimmed === '-') return { valid: true };
+    if (trimmed.length > 500) {
+      return { valid: false, message: 'Terlalu panjang (maks 500 karakter).' };
+    }
+    return { valid: true };
+  }
+
+  if (fieldKey === 'alasan_otorisasi') {
+    if (trimmed.length < 5) {
+      return { valid: false, message: 'Alasan terlalu singkat (min. 5 karakter).' };
+    }
+    if (trimmed.length > 1000) {
+      return { valid: false, message: 'Alasan terlalu panjang (maks 1000 karakter).' };
     }
   }
 

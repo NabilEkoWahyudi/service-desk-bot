@@ -28,6 +28,12 @@ let isInitializing = false;   // Guard: cegah double-init saat --watch restart
 let reconnectAttempts = 0;
 let chromePid = null;    // [FIX-3] Simpan PID Chrome Puppeteer untuk targeted cleanup
 
+// ─── Fitur: Chat Only ───────────────────────────────────────────────────
+// Simpan pesan teks terakhir per nomor WA.
+// Digunakan untuk mengulangi pesan terakhir saat user mengirim stiker.
+// Map<waNumber, string>
+const lastTextByNumber = new Map();
+
 const MAX_RECONNECT = 5;
 const INIT_TIMEOUT_MS = 120_000;  // [FIX-1] 120 detik
 // Watchdog: jika Promise.race macet (Chrome zombie), paksa kill setelah durasi ini
@@ -208,10 +214,10 @@ async function initWhatsApp() {
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-breakpad',
+    '--disable-web-security',
     '--disable-component-extensions-with-background-pages',
     '--disable-ipc-flooding-protection',
     '--disable-renderer-backgrounding',
-    '--enable-features=NetworkService,NetworkServiceInProcess',
     '--disable-hang-monitor',
     '--disable-client-side-phishing-detection',
     '--disable-popup-blocking',
@@ -229,8 +235,9 @@ async function initWhatsApp() {
     '--media-cache-size=33554432',  // 32MB media cache
     // ── [FIX-4] Suppress crash recovery dialog agar tidak block startup ──
     '--disable-session-crashed-bubble',
-    // ── Optimasi: Blokir image loading di level browser (bot teks tidak butuh ini) ──
-    '--blink-settings=imagesEnabled=false',
+    // CATATAN: '--blink-settings=imagesEnabled=false' DIHAPUS karena memblokir
+    // downloadMedia() saat user mengirim foto. Flag ini mencegah Chromium memuat
+    // blob media WhatsApp sehingga msg.downloadMedia() selalu gagal dengan error "r".
     // ── Linux only ──────────────────────────────────────────────────────────
     ...(isLinux ? [
       '--no-sandbox',              // Wajib di Linux tanpa setuid sandbox
@@ -274,36 +281,29 @@ async function initWhatsApp() {
     puppeteer: puppeteerConfig
   };
 
-  // webVersionCache: simpan versi WA Web ke disk agar tidak re-download setiap restart
-  clientConfig.webVersionCache = { type: 'local' };
+  // webVersionCache: PENTING! Pin versi WA Web ke rilis stabil (2.2412.54)
+  // WhatsApp Web sering mengupdate kode internal (merubah WAWebDownloadManager)
+  // yang menyebabkan error "r" saat mendownload media. Mem-pin versi ini
+  // menjamin kompatibilitas 100% dengan whatsapp-web.js v1.26.1-alpha.4.
+  clientConfig.webVersionCache = {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+  };
 
   if (waWebVersion) {
     clientConfig.webVersion = waWebVersion;
-    logger.info(` [WhatsApp] Menggunakan WA Web versi terpilih: ${waWebVersion} (cache: disk)`);
+    logger.info(` [WhatsApp] Menggunakan WA Web versi terpilih: ${waWebVersion} (cache: remote)`);
   } else {
-    logger.info(' [WhatsApp] WA_WEB_VERSION tidak di-set — versi terbaru otomatis (cache: disk)');
+    logger.info(' [WhatsApp] WA_WEB_VERSION di-pin ke 2.2412.54 secara remote untuk stabilitas downloadMedia()');
   }
 
-  // (Flag --blink-settings=imagesEnabled=false sudah ada di dalam puppeteerArgs di atas)
 
   waClient = new Client(clientConfig);
 
   // ── Blokir Image / CSS / Font via Puppeteer Request Interception ─────────
-  // Dipasang via event 'page_created' agar intercept aktif SEBELUM WhatsApp Web dimuat.
-  // pupPage tidak tersedia sebelum initialize() — handler ini adalah satu-satunya cara
-  // yang benar untuk memasang request interception. (B4 fix)
-  waClient.on('page_created', (page) => {
-    page.setRequestInterception(true).catch(() => { });
-    page.on('request', (req) => {
-      const type = req.resourceType();
-      if (['image', 'media', 'stylesheet', 'font'].includes(type)) {
-        req.abort().catch(() => { });
-      } else {
-        req.continue().catch(() => { });
-      }
-    });
-    logger.info(' [WhatsApp] Request interception aktif — image/CSS/font diblokir untuk mempercepat inisialisasi.');
-  });
+  // (DIHAPUS: Request interception di Puppeteer dapat mengganggu Service Worker
+  // WhatsApp Web dan menyebabkan error "r" saat memanggil downloadMedia())
+
 
   // ─── Event: QR Code ───────────────────────────────────────────────────────
   waClient.on('qr', (qr) => {
@@ -371,10 +371,131 @@ async function initWhatsApp() {
     }, delay);
   });
 
+  // ─── Dedup stiker: cegah double-reply jika muncul di kedua event ─────────
+  // Stiker bisa muncul di KEDUA event ('message' dan 'message_create') sekaligus.
+  // Set ini menyimpan ID stiker yang sudah diproses selama 5 detik terakhir.
+  const _stickerProcessed = new Set();
+
+  // ─── Helper: Kirim balasan stiker (dengan retry + dedup) ─────────────────
+  async function handleStickerReply(msg) {
+    const senderFrom = msg.from || '';
+    if (senderFrom.includes('@g.us') || senderFrom === 'status@broadcast' || msg.fromMe) return;
+    if (!waClient) return;
+
+    // Deduplication: skip jika ID yang sama sudah diproses dalam ~5 detik
+    const dedupKey = msg.id?.id || `${senderFrom}_${msg.timestamp}`;
+    if (_stickerProcessed.has(dedupKey)) {
+      logger.info(`[WhatsApp] Stiker ${dedupKey} sudah diproses — skip duplikat.`);
+      return;
+    }
+    _stickerProcessed.add(dedupKey);
+    // Auto-hapus dari Set setelah 5 detik
+    setTimeout(() => _stickerProcessed.delete(dedupKey), 5000);
+
+    let waNumSticker;
+    try {
+      const contact = await msg.getContact();
+      waNumSticker = contact.id?.user || senderFrom.replace(/@.*$/, '');
+    } catch (_) {
+      waNumSticker = senderFrom.replace(/@.*$/, '');
+    }
+
+    const lastText = lastTextByNumber.get(waNumSticker);
+    const textToSend = lastText || (
+      'Halo! \uD83D\uDE0A\n\nSaya adalah *IT Service Desk Bot PLN Batam*.\n' +
+      'Ketik pesan perintah yang sesuai\n\n' +
+      'Silakan ketik *menu* untuk melihat layanan yang tersedia.'
+    );
+
+    const doSend = async () => {
+      if (!waClient) throw new Error('waClient belum siap');
+      try {
+        const chat = await msg.getChat();
+        await chat.sendStateTyping();
+        await new Promise(r => setTimeout(r, 800 + Math.random() * 1700));
+      } catch (typingErr) {
+        // Typing indicator gagal, lanjutkan saja kirim pesan
+      }
+      await waClient.sendMessage(senderFrom, textToSend);
+    };
+
+    try {
+      await doSend();
+      logger.info(`[WhatsApp] Stiker dari ${waNumSticker} dibalas (lastText: ${!!lastText}).`);
+    } catch (err) {
+      const errMsg = (err && err.message) ? err.message : String(err);
+      // Error "r" atau <=2 karakter = transient WA internal — retry sekali
+      if (errMsg.length <= 2) {
+        logger.warn(`[WhatsApp] Stiker: WA error "${errMsg}" ke ${waNumSticker} — retry 2 detik...`);
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          await doSend();
+          logger.info(`[WhatsApp] Stiker dari ${waNumSticker} — retry berhasil.`);
+        } catch (err2) {
+          logger.error(`[WhatsApp] Stiker dari ${waNumSticker} — retry juga gagal: ${err2.message}`);
+        }
+      } else {
+        logger.warn(`[WhatsApp] Gagal balas stiker dari ${waNumSticker}: ${errMsg}`);
+      }
+    }
+  }
+
+  // ─── Fallback Stiker via message_create ──────────────────────────────────
+  // Di beberapa versi whatsapp-web.js, stiker hanya muncul di 'message_create'.
+  waClient.on('message_create', async (msg) => {
+    if (msg.fromMe) return;
+    if ((msg.from || '').includes('@g.us')) return;
+    if (msg.from === 'status@broadcast') return;
+
+    if (msg.type === 'sticker') {
+      await handleStickerReply(msg);
+    }
+  });
+
+
+  // ─── Sistem Antrean Pesan (Anti-DDoS / Spam Protection) ───────────────────
+  class MessageQueue {
+    constructor(concurrency = 5, delayMs = 1000, maxLength = 200) {
+      this.concurrency = concurrency;
+      this.delayMs = delayMs;
+      this.maxLength = maxLength;
+      this.running = 0;
+      this.queue = [];
+    }
+    async add(task) {
+      if (this.queue.length >= this.maxLength) {
+        logger.warn('[WhatsApp] Antrean penuh, pesan dibuang untuk mencegah DDoS');
+        return Promise.reject(new Error('Antrean penuh'));
+      }
+      return new Promise((resolve, reject) => {
+        this.queue.push(async () => {
+          try {
+            resolve(await task());
+          } catch (err) {
+            reject(err);
+          } finally {
+            this.running--;
+            // Jeda 1 detik (1000ms) untuk tiket/antrean ke-11 ke atas sesuai instruksi
+            setTimeout(() => this.next(), this.delayMs);
+          }
+        });
+        this.next();
+      });
+    }
+    next() {
+      if (this.running >= this.concurrency || this.queue.length === 0) return;
+      this.running++;
+      const task = this.queue.shift();
+      task();
+    }
+  }
+  const botQueue = new MessageQueue(5, 1000, 200);
+
   // ─── Event: Pesan Masuk ───────────────────────────────────────────────────
   // Catatan: event 'message' hanya menerima pesan MASUK (dari pengguna ke bot),
   // sehingga tidak perlu logika rumit untuk menghindari loop.
-  waClient.on('message', async (msg) => {
+  waClient.on('message', async (rawMsg) => {
+    const msg = rawMsg;
     // Abaikan: grup, status broadcast, pesan dari bot sendiri
     if (msg.from.includes('@g.us') || msg.from === 'status@broadcast' || msg.fromMe) {
       return;
@@ -394,20 +515,6 @@ async function initWhatsApp() {
       return;
     }
 
-    // Abaikan pesan media (hanya proses teks)
-    if (msg.hasMedia) {
-      try {
-        const chat = await msg.getChat();
-        await chat.sendStateTyping();
-        await new Promise(r => setTimeout(r, 500));
-        await msg.reply(
-          'Maaf, saat ini IT Service Desk Bot hanya menerima pesan *teks*. \n\n' +
-          'Silakan ketik permintaan Anda dalam bentuk teks.'
-        );
-      } catch (_) { }
-      return;
-    }
-
     // Ekstrak nomor WA
     let waNumber;
     try {
@@ -417,10 +524,7 @@ async function initWhatsApp() {
       waNumber = msg.from.replace(/@.*$/, '');
     }
 
-    const msgText = (msg.body || '').trim();
-    if (!msgText) return;
-
-    // ─── F4: Whitelist Nomor WA ────────────────────────────────────────────
+    // ─── F4: Whitelist Nomor WA (Dicek Paling Awal) ────────────────────────
     const whitelistEnv = process.env.WA_WHITELIST || '';
     if (whitelistEnv) {
       const whitelist = whitelistEnv.split(',').map(n => n.trim()).filter(Boolean);
@@ -430,15 +534,45 @@ async function initWhatsApp() {
       }
     }
 
+    // Membungkus seluruh logika pemrosesan chat ke dalam keranjang antrean (Maksimal 5)
+    botQueue.add(async () => {
+      // ── Stiker: tangkap SEBELUM cek hasMedia (hasMedia bisa false di beberapa versi) ──
+      if (msg.type === 'sticker') {
+        await handleStickerReply(msg);
+        return;
+      }
+
+      // Abaikan pesan media TAPI izinkan tipe 'image' (agar user bisa kirim foto + caption)
+      if (msg.hasMedia && msg.type !== 'image') {
+        try {
+          const chat = await msg.getChat();
+          await chat.sendStateTyping();
+          await new Promise(r => setTimeout(r, 800 + Math.random() * 1700));
+          await msg.reply(
+            'Maaf, saat ini IT Service Desk Bot hanya menerima lampiran berupa *Foto/Gambar* dan pesan teks.\n\n' +
+            'Silakan ulangi kembali.'
+          );
+        } catch (_) { }
+        return;
+      }
+
+      const msgText = (msg.body || '').trim();
+      // Jika tidak ada teks dan tidak ada media, abaikan
+      if (!msgText && !msg.hasMedia) return;
+
     // ─── Kirim ke Message Handler ──────────────────────────────────────────
+    // Teruskan `msg` sebagai parameter ke-4 agar handler bisa mengunduh attachment jika perlu.
     await handleMessage(waNumber, msgText, async (replyText, mediaPath = null) => {
+      // Simpan pesan balasan terakhir bot (digunakan saat stiker masuk)
+      if (replyText) lastTextByNumber.set(waNumber, replyText);
+
       // ── Typing indicator (tidak kritis — error-nya tidak boleh abort pengiriman) ──
       try {
         const chat = await msg.getChat();
         await chat.sendStateTyping();
       } catch (_) { /* typing indicator gagal — lanjut kirim pesan */ }
 
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 800 + Math.random() * 1700));
 
       // ── Helper: kirim pesan via sendMessage (lebih stabil dari msg.reply) ──────
       // Tidak menggunakan msg.reply() karena WA Web internal JS yang di-minify
@@ -479,7 +613,8 @@ async function initWhatsApp() {
           logger.error(`[WhatsApp] Gagal mengirim balasan ke ${waNumber}: "${errMsg}"`);
         }
       }
-    });
+    }, msg);
+    }); // Penutup botQueue.add
   });
 
   // ─── Inisialisasi Client ─────────────────────────────────────────────────

@@ -20,7 +20,7 @@
  *   Group, Level (Request), Status (Open), Service Category (Manajemen User)
  */
 
-const { submitToEndpoint, lookupUserByEmail, getApprovalLevels, getApprovalsByLevel, approveTicket, rejectTicket } = require('../services/ticket.service');
+const { submitToEndpoint, lookupUserByEmail, getApprovalLevels, getApprovalsByLevel, approveTicket, rejectTicket, uploadAttachment } = require('../services/ticket.service');
 const { CATEGORY_CONFIG } = require('../config/endpoints');
 const { buildAllFieldsPrompt, parseNumberedList, validateField } = require('../utils/validators');
 const { loadSessions, saveSessions } = require('../services/session.service');
@@ -38,6 +38,8 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 const encryptedStore = require('../utils/encrypted-store');
+const { SlidingWindowRateLimiter, DuplicateTicketGuard } = require('../utils/ticket-protection');
+const { downloadMediaDirect } = require('../utils/wa-media-download');
 
 // ─── In-Memory Session Store ─────────────────────────────────────────────────
 // Map<waNumber, SessionData>
@@ -146,10 +148,35 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000); // Setiap 30 menit
 
+// ─── Item 1: Token Bucket Throttle (per WA) ──────────────────────────────
+const tokenBuckets = new Map();
+function checkThrottle(waNumber) {
+  const now = Date.now();
+  if (!tokenBuckets.has(waNumber)) {
+    tokenBuckets.set(waNumber, { tokens: 5, lastRefill: now });
+  }
+  const bucket = tokenBuckets.get(waNumber);
+  const timePassed = now - bucket.lastRefill;
+  const tokensToAdd = Math.floor(timePassed / 2000); // 1 token per 2 detik
+  if (tokensToAdd > 0) {
+    bucket.tokens = Math.min(5, bucket.tokens + tokensToAdd);
+    bucket.lastRefill = now - (timePassed % 2000);
+  }
+  if (bucket.tokens >= 1) {
+    bucket.tokens -= 1;
+    return true; // allowed
+  }
+  return false; // throttled
+}
+
+// ─── Item 8: Duplicate Ticket Detection ──────────────────────────────
+const duplicateTicketGuard = new DuplicateTicketGuard(10 * 60 * 1000);
+
+
 // ─── Item 7: Anti-spam dengan Auto-Expiry Lock ───────────────────────────────
 // Menggunakan Map<waNumber, timestamp> agar lock stale otomatis expire
 // setelah LOCK_TIMEOUT — mencegah ghost lock permanen akibat error tak terduga.
-const LOCK_TIMEOUT_MS = 5 * 60 * 1000;  // 5 menit maksimum lock
+const LOCK_TIMEOUT_MS = 90 * 1000;  // 90 detik maksimum lock
 const processingLock = new Map();       // waNumber → lockedAt (timestamp)
 
 function acquireLock(waNumber) {
@@ -167,10 +194,10 @@ function releaseLock(waNumber) {
   processingLock.delete(waNumber);
 }
 
-// ─── Item 2: Rate Limiter Per User ─────────────────────────────────────────────────
-// Maksimum MAX_TICKETS_PER_WINDOW tiket untuk semua request per RATE_WINDOW_MS.
-const MAX_TICKETS_PER_WINDOW = 10;
-const RATE_WINDOW_MS = 60 * 1000; // 1 menit
+// ─── Item 2: Sliding Window Per EMAIL dan WA ─────────────────────────────────
+// Reservasi dilakukan sebelum submit agar nomor/email yang dipakai serentak tetap dibatasi.
+const MAX_TICKETS_PER_WINDOW = parseInt(process.env.RATE_LIMIT_MAX || '10', 10);
+const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 menit
 const RATELIMIT_FILE = path.join(__dirname, '../../data/ratelimit.json');
 
 /**
@@ -183,11 +210,15 @@ function loadRateLimit() {
     const obj = encryptedStore.readJson(RATELIMIT_FILE, {});
     const now = Date.now();
     const store = new Map();
-    for (const [waNumber, record] of Object.entries(obj)) {
-      // Hanya muat window yang masih valid (dalam rentang RATE_WINDOW_MS)
-      if (record && now - record.windowStart < RATE_WINDOW_MS) {
-        store.set(waNumber, record);
-      }
+    for (const [storedKey, record] of Object.entries(obj)) {
+      const key = storedKey.startsWith('email:') || storedKey.startsWith('wa:')
+        ? storedKey
+        : (storedKey.includes('@') ? `email:${storedKey}` : `wa:${storedKey}`);
+      const timestamps = Array.isArray(record?.timestamps)
+        ? record.timestamps
+        : Array.from({ length: Math.max(0, Number(record?.count) || 0) }, () => Number(record?.windowStart) || now);
+      const activeTimestamps = timestamps.filter(timestamp => now - timestamp < RATE_WINDOW_MS);
+      if (activeTimestamps.length) store.set(key, activeTimestamps);
     }
     logger.info(`[RateLimit] Data rate limit dimuat dari disk (${store.size} entri aktif)` +
       (encryptedStore.ENCRYPTION_ENABLED ? ' [terenkripsi]' : ' [plain JSON]') + '.');
@@ -197,8 +228,6 @@ function loadRateLimit() {
   }
   return new Map();
 }
-
-const rateLimitStore = loadRateLimit(); // waNumber → { count, windowStart }
 
 // Debounce timer untuk menghindari terlalu banyak write ke disk
 let _rateLimitSaveTimer = null;
@@ -210,47 +239,161 @@ let _rateLimitSaveTimer = null;
 function saveRateLimit() {
   if (_rateLimitSaveTimer) clearTimeout(_rateLimitSaveTimer);
   _rateLimitSaveTimer = setTimeout(() => {
-    const obj = Object.fromEntries(rateLimitStore);
+    const obj = Object.fromEntries(ticketRateLimiter.records);
     encryptedStore.writeJson(RATELIMIT_FILE, obj);
   }, 500); // 500ms debounce
 }
 
-/**
- * Cek apakah batas pengiriman tiket keseluruhan sudah tercapai
- * @returns {{ allowed: boolean, remaining: number, resetIn: string }}
- */
-function checkRateLimit(waNumber) {
-  const now = Date.now();
-  const key = waNumber;
-  const record = rateLimitStore.get(key);
+const ticketRateLimiter = new SlidingWindowRateLimiter(
+  MAX_TICKETS_PER_WINDOW,
+  RATE_WINDOW_MS,
+  loadRateLimit(),
+  saveRateLimit
+);
 
-  if (!record || now - record.windowStart > RATE_WINDOW_MS) {
-    // Window baru atau sudah expired — reset counter
-    rateLimitStore.set(key, { count: 0, windowStart: now });
-    saveRateLimit();
-    return { allowed: true, remaining: MAX_TICKETS_PER_WINDOW };
-  }
-
-  const remaining = MAX_TICKETS_PER_WINDOW - record.count;
-  if (remaining <= 0) {
-    const resetInMs = RATE_WINDOW_MS - (now - record.windowStart);
-    const resetInSecs = Math.ceil(resetInMs / 1000);
-    return { allowed: false, remaining: 0, resetIn: `${resetInSecs} detik` };
-  }
-
-  return { allowed: true, remaining };
+function ticketRateLimitKeys(email, waNumber) {
+  const keys = [`wa:${waNumber}`];
+  if (email) keys.push(`email:${email.toLowerCase().trim()}`);
+  return keys;
 }
 
 /**
- * Tambahkan hitungan tiket keseluruhan dan simpan ke disk
+ * Periksa apakah user sudah melebihi rate limit tiket.
+ * Dipanggil SEBELUM submit tiket ke ManageEngine.
+ * @param {string} waNumber
+ * @param {string|null} email
+ * @returns {{ blocked: boolean, resetInMs?: number }}
  */
-function incrementRateLimit(waNumber) {
-  const key = waNumber;
-  const record = rateLimitStore.get(key) || { count: 0, windowStart: Date.now() };
-  record.count += 1;
-  rateLimitStore.set(key, record);
-  logger.info(`[RateLimit] User ${waNumber} — tiket ke-${record.count} dari maks ${MAX_TICKETS_PER_WINDOW} per menit`);
-  saveRateLimit();
+function checkRateLimit(waNumber, email = null) {
+  const keys = ticketRateLimitKeys(email, waNumber);
+  const result = ticketRateLimiter.reserve(keys);
+  if (!result.allowed) {
+    return { blocked: true, resetInMs: result.resetInMs };
+  }
+  // Rollback reservasi — hanya dipakai untuk cek, bukan commit
+  ticketRateLimiter.rollback(result.reservation);
+  return { blocked: false };
+}
+
+/**
+ * Catat penggunaan rate limit setelah tiket berhasil terkirim.
+ * @param {string} waNumber
+ * @param {string|null} email
+ */
+function incrementRateLimit(waNumber, email = null) {
+  const keys = ticketRateLimitKeys(email, waNumber);
+  ticketRateLimiter.reserve(keys); // commit otomatis saat reserve (tidak di-rollback)
+}
+
+/**
+ * Periksa apakah tiket duplikat (payload sama dalam 10 menit).
+ * @param {string} waNumber
+ * @param {string} payloadStr - JSON.stringify(session.data)
+ * @returns {boolean} true jika duplikat (harus ditolak)
+ */
+function checkDuplicateTicket(waNumber, payloadStr) {
+  const fingerprint = `${waNumber}:${payloadStr}`;
+  const reservation = duplicateTicketGuard.reserve(fingerprint);
+  if (!reservation) return true; // duplikat
+  // Commit duplikat guard langsung — tiket akan segera disubmit
+  duplicateTicketGuard.commit(reservation);
+  return false;
+}
+
+// ─── Input Error Limiter (per nomor WA) ──────────────────────────────────────
+// Jika user salah isi form sebanyak INPUT_ERROR_MAX kali berturut-turut,
+// dikenakan cooldown progresif (1, 5, 15 menit) yang disimpan di disk.
+const INPUT_ERROR_MAX      = 5;
+const INPUT_ERROR_FILE     = path.join(__dirname, '../../data/inputerror.json');
+
+function loadInputErrorStore() {
+  try {
+    const obj = encryptedStore.readJson(INPUT_ERROR_FILE, {});
+    const store = new Map();
+    for (const [key, val] of Object.entries(obj)) {
+      if (val && (val.errorCount > 0 || val.cooldownUntil)) store.set(key, val);
+    }
+    return store;
+  } catch (err) { return new Map(); }
+}
+const inputErrorStore = loadInputErrorStore();
+
+let _inputErrorSaveTimer = null;
+function saveInputErrorStore() {
+  if (_inputErrorSaveTimer) clearTimeout(_inputErrorSaveTimer);
+  _inputErrorSaveTimer = setTimeout(() => {
+    encryptedStore.writeJson(INPUT_ERROR_FILE, Object.fromEntries(inputErrorStore));
+  }, 500);
+}
+
+function getInputErrorRecord(waNumber) {
+  if (!inputErrorStore.has(waNumber)) {
+    inputErrorStore.set(waNumber, { errorCount: 0, cooldownUntil: null, notified: false, tier: 0 });
+  }
+  return inputErrorStore.get(waNumber);
+}
+
+function checkInputCooldown(waNumber) {
+  const rec = getInputErrorRecord(waNumber);
+  const now = Date.now();
+  if (rec.cooldownUntil && now < rec.cooldownUntil) {
+    return { blocked: true, remainingMs: rec.cooldownUntil - now };
+  }
+  if (rec.cooldownUntil && now >= rec.cooldownUntil) {
+    rec.errorCount   = 0;
+    rec.cooldownUntil = null;
+    rec.notified      = false;
+    saveInputErrorStore();
+  }
+  return { blocked: false, remainingMs: 0 };
+}
+
+function incrementInputError(waNumber) {
+  const rec = getInputErrorRecord(waNumber);
+  rec.errorCount += 1;
+  logger.info(`[InputLimit] ${waNumber} — kesalahan isi ke-${rec.errorCount}/${INPUT_ERROR_MAX}`);
+
+  if (rec.errorCount >= INPUT_ERROR_MAX) {
+    const tiers = [1 * 60000, 5 * 60000, 15 * 60000];
+    const tierIdx = Math.min(rec.tier || 0, tiers.length - 1);
+    const cooldownMs = tiers[tierIdx];
+    rec.tier = (rec.tier || 0) + 1;
+    rec.cooldownUntil = Date.now() + cooldownMs;
+    rec.notified      = false;
+    rec.errorCount    = 0;
+    saveInputErrorStore();
+    logger.warn(`[InputLimit] ${waNumber} — cooldown ${cooldownMs/60000} menit diaktifkan.`);
+
+    setTimeout(async () => {
+      try {
+        const currentRec = inputErrorStore.get(waNumber);
+        if (currentRec && !currentRec.notified) {
+          currentRec.notified = true;
+          saveInputErrorStore();
+          const { sendMessageToNumber } = require('../services/whatsapp.service');
+          await sendMessageToNumber(waNumber,
+            '✅ *Waktu jeda telah selesai.*\n\n' +
+            'Anda sudah bisa mengisi ulang data kembali.\n' +
+            'Ketik *menu* untuk memulai dari awal, atau lanjutkan mengisi form.'
+          );
+        }
+      } catch (notifErr) {}
+    }, cooldownMs + 500);
+
+    return { cooldownActivated: true };
+  }
+  saveInputErrorStore();
+  return { cooldownActivated: false };
+}
+
+function resetInputError(waNumber) {
+  const rec = inputErrorStore.get(waNumber);
+  if (rec) {
+    rec.tier = 0;
+    rec.errorCount = 0;
+    rec.cooldownUntil = null;
+    saveInputErrorStore();
+  }
 }
 
 
@@ -259,29 +402,50 @@ function incrementRateLimit(waNumber) {
 /**
  * Proses pengiriman tiket AUTORISASI.
  *
- * Alur yang diinginkan:
- *   1. Submit tiket ke ManageEngine
- *   2. Daftarkan ke notification service untuk tracking
- *   3. Informasikan staf bahwa tiket terkirim
+ * Alur berdasarkan tipe user:
  *
- * Pengiriman WA approval ke atasan TIDAK dilakukan di sini.
- * Akan dilakukan secara otomatis oleh notification.service.js
- * ketika mendeteksi notifikasi type="approval" dari ManageEngine
- * (dikirim setelah Tim IT submit approval di ServiceDesk).
+ * ── ATASAN (isSenior = true) ──────────────────────────────────────────────────
+ *   1. Submit tiket dengan template SENIOR (ID: 2408, "Tanpa Approval")
+ *      → ManageEngine TIDAK membuat approval level → tiket langsung ke teknisi
+ *   2. Kirim konfirmasi ke atasan bahwa request diterima langsung
+ *
+ * ── USER BIASA (isSenior = false) ─────────────────────────────────────────────
+ *   1. Submit tiket dengan template NORMAL (ID: 2404, "Formulir Permintaan Get Approvals")
+ *      → ManageEngine membuat approval workflow → kirim notif ke atasan
+ *   2. Daftarkan ke notification service untuk tracking
+ *   3. Kirim WA approval ke atasan secara langsung
+ *   4. Informasikan staf bahwa tiket terkirim & menunggu persetujuan atasan
  *
  * @param {object}   session   - Session user saat ini
  * @param {string}   waNumber  - Nomor WA staf pemohon
  * @param {Function} sendReply - Fungsi untuk membalas WA pemohon
  */
-async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
-  // 1. Submit tiket ke ManageEngine
-  const result = await submitToEndpoint(
-    session.category,
-    session.data,
-    session.verifiedUser || null
-  );
+async function handleAutorisasiWithApproval(session, waNumber, sendReply, rateReservation, duplicateReservation) {
+  const verifiedUser  = session.verifiedUser || null;
+  const isSenior      = verifiedUser?.isSenior || false;
+  const jobTitle      = verifiedUser?.jobTitle || verifiedUser?.jobtitle || '';
+  const appName       = session.data.nama_aplikasi || '-';
+
+  // ── 1. Submit tiket ke ManageEngine ─────────────────────────────────────────
+  //    Atasan (isSenior=true)  → template 2408 (Tanpa Approval): tidak ada approval level
+  //    User biasa              → template 2404 (Dengan Approval): approval workflow aktif
+  let result;
+  try {
+    result = await submitToEndpoint(
+      session.category,
+      session.data,
+      verifiedUser,
+      { isSenior }
+    );
+  } catch (error) {
+    ticketRateLimiter.rollback(rateReservation);
+    duplicateTicketGuard.release(duplicateReservation);
+    throw error;
+  }
 
   if (!result.success) {
+    ticketRateLimiter.rollback(rateReservation);
+    duplicateTicketGuard.release(duplicateReservation);
     await sendReply(
       ` *Request gagal dikirim ke server PLN.*\n\n` +
       `ℹ️ Keterangan: ${result.message}\n\n` +
@@ -292,12 +456,10 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
   }
 
   const requestId = result.requestId;
-  const appName = session.data.nama_aplikasi || '-';
-  const verifiedUser  = session.verifiedUser || null;
-  const jobTitle      = verifiedUser?.jobTitle || '';
+  duplicateTicketGuard.commit(duplicateReservation);
+  const attachmentUploaded = requestId ? await uploadSessionMedia(requestId, session) : null;
 
-  // 2. Daftarkan tiket ke notification service untuk tracking jangka panjang
-  //    (polling tetap berjalan untuk notifikasi system_notification & balasan admin)
+  // ── 2. Daftarkan tiket ke notification service (untuk semua tipe user) ───────
   const supervisorWa    = verifiedUser?.supervisorWa    || null;
   const supervisorMeId  = verifiedUser?.supervisorMeId  || null;
   if (requestId) {
@@ -307,54 +469,29 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
       verifiedUser,
       session.data.nama_aplikasi || null
     );
-    incrementRateLimit(waNumber);
     logger.info(
       `[Handler] Tiket AUTORISASI ${requestId} didaftarkan — ` +
-      `supervisorWa: ${supervisorWa || 'belum diketahui'}, supervisorMeId: ${supervisorMeId || 'belum diketahui'}`
+      `isSenior=${isSenior}, jabatan="${jobTitle}", ` +
+      `supervisorWa: ${supervisorWa || 'N/A'}, supervisorMeId: ${supervisorMeId || 'N/A'}`
     );
   }
 
-  // 3. Cek jabatan pemohon via org_roles ManageEngine — jika isSenior=true (punya role 'Reporting To'),
-  //    langsung auto-approve (tidak perlu WA ke atasan).
-  //    isSenior di-fetch dinamis dari GET /api/v3/users/{id} saat validasi email, tanpa hardcode.
-  if (requestId && verifiedUser?.isSenior) {
+  // ── 3. ATASAN (isSenior=true): tiket sudah masuk langsung ke teknisi ─────────
+  //    Tidak ada approval workflow di ManageEngine (template 2408 tidak punya level approver).
+  //    Tidak perlu auto-approve, tidak perlu notif ke atasan lain — langsung konfirmasi.
+  if (isSenior) {
     logger.info(
-      `[Handler] isSenior=true (org_role 'Reporting To') — tiket ${requestId} di-auto-approve, jabatan: "${jobTitle}".`
+      `[Handler] isSenior=true (${jobTitle}) — template tanpa approval digunakan (ID: ` +
+      `${result.requestId ? requestId : 'unknown'}). Tiket langsung ke teknisi.`
     );
-
-    // Coba auto-approve via API ManageEngine
-    let autoApproveSuccess = false;
-    try {
-      const { getApprovalLevels, getApprovalsByLevel, approveTicket } = require('../services/ticket.service');
-      await new Promise(r => setTimeout(r, 2000)); // tunggu ME selesai buat approval level
-      const levels = await getApprovalLevels(requestId);
-      if (levels.length > 0) {
-        const lvl = levels[0];
-        const lvlId = lvl.level_number ?? lvl.id;
-        let approvals = lvl.approvals || [];
-        if (approvals.length === 0) approvals = await getApprovalsByLevel(requestId, lvlId);
-        if (approvals.length > 0) {
-          const approvalId = approvals[0].id;
-          const approveResult = await approveTicket(requestId, String(lvlId), String(approvalId));
-          autoApproveSuccess = approveResult.success;
-          if (approveResult.success) {
-            logger.info(`[Handler] ✓ Auto-approve berhasil untuk tiket ${requestId} (jabatan: ${jobTitle})`);
-          } else {
-            logger.warn(`[Handler] Auto-approve gagal tiket ${requestId}: ${approveResult.error}`);
-          }
-        }
-      }
-    } catch (autoErr) {
-      logger.warn(`[Handler] Error saat auto-approve tiket ${requestId}: ${autoErr.message}`);
-    }
-
     await sendReply(
       ` *Request berhasil dikirim ke IT Service Desk PLN Batam!*\n\n` +
       `*Kategori* : Pembuatan atau Perubahan Otorisasi Aplikasi\n` +
       `*Aplikasi* : ${appName}\n` +
       (requestId ? `*No. Tiket* : ${requestId}\n` : '') +
-      `*Status* : ${autoApproveSuccess ? 'Disetujui Otomatis ✅' : 'Terkirim ke ServiceDesk'}\n\n` +
-      ` Sebagai ${jobTitle}, permintaan Anda tidak memerlukan persetujuan atasan.\n` +
+      `*Status*   : Disetujui Langsung ✅\n\n` +
+      (attachmentUploaded === false ? `⚠️ Tiket terkirim, tetapi foto gagal diunggah. Silakan hubungi Tim IT.\n\n` : '') +
+      ` Sebagai *${jobTitle}*, permintaan Anda tidak memerlukan persetujuan atasan.\n` +
       `Tim IT akan segera menindaklanjuti request Anda.\n\n` +
       `Ketik *menu* untuk mengajukan request baru.`
     );
@@ -362,18 +499,12 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
     return;
   }
 
-  // 4. [DIHAPUS] Inisiasi manual approval level dihapus. 
-  //    Sekarang ManageEngine otomatis mengirim approval berkat opsi 'Send approval notification automatically'
-  //    di Template 'Formulir Permintaan Get Approvals'.
-
-  // 5. Kirim WA approval ke atasan LANGSUNG — tanpa menunggu polling ManageEngine
+  // ── 4. USER BIASA: Kirim WA approval ke atasan langsung ─────────────────────
   //    Anti-duplikat: polling akan skip notif type="approval" jika requestId
   //    sudah ada di pendingApprovals store (dijaga oleh getSupervisorWaByRequestId).
   let approvalSentToSupervisor = false;
   if (requestId && supervisorWa) {
     try {
-      const verifiedUser = session.verifiedUser || null;
-
       // Simpan ke pending approval store terlebih dahulu
       addPendingApproval(supervisorWa, {
         requestId:      String(requestId),
@@ -385,7 +516,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
         department:     verifiedUser?.department || '',
         supervisorMeId: supervisorMeId           || null,
         nip:            verifiedUser?.employeeId || '',
-        userAccount:    verifiedUser?.loginName  || '',
+        userAccount:    session.data.username_aplikasi || verifiedUser?.loginName  || '',
         jabatan:        verifiedUser?.jobTitle   || '',
         staffData:      verifiedUser             || null
       });
@@ -396,7 +527,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
         appName:     appName,
         department:  verifiedUser?.department || '',
         nip:         verifiedUser?.employeeId || '',
-        userAccount: verifiedUser?.loginName  || '',
+        userAccount: session.data.username_aplikasi || verifiedUser?.loginName  || '',
         jabatan:     verifiedUser?.jobTitle   || '',
         staffData:   verifiedUser             || null
       });
@@ -425,7 +556,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
     );
   }
 
-  // 4. Informasikan staf
+  // ── 5. Informasikan staf ─────────────────────────────────────────────────────
   const supervisorNote = approvalSentToSupervisor
     ? ` Permintaan persetujuan sudah dikirim otomatis ke WhatsApp atasan Anda.\n`
     : ` Permintaan persetujuan akan dikirim ke WhatsApp atasan Anda setelah diproses Tim IT.\n`;
@@ -436,6 +567,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
     `*Aplikasi* : ${appName}\n` +
     (requestId ? `*No. Tiket* : ${requestId}\n` : '') +
     `*Status* : Terkirim ke ServiceDesk\n\n` +
+    (attachmentUploaded === false ? `⚠️ Tiket terkirim, tetapi foto gagal diunggah. Silakan hubungi Tim IT.\n\n` : '') +
     supervisorNote +
     `Anda akan mendapat notifikasi WhatsApp begitu atasan memberikan keputusan.\n\n` +
     `Ketik *menu* untuk mengajukan request baru.`
@@ -444,22 +576,36 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply) {
   resetSession(waNumber);
 }
 
+async function uploadSessionMedia(requestId, session) {
+  if (!requestId || !session.media) return null;
+  const result = await uploadAttachment(requestId, session.media);
+  session.media = null;
+  return result.success;
+}
+
+
 /**
  * Handler utama untuk setiap pesan masuk
  *
  * @param {string} waNumber - Nomor WhatsApp pengirim
  * @param {string} messageText - Isi pesan
  * @param {Function} sendReply - Fungsi untuk mengirim balasan: (text) => Promise<void>
+ * @param {Object|null} msg - Objek pesan asli dari WA (untuk media)
  */
-async function handleMessage(waNumber, messageText, sendReply) {
+async function handleMessage(waNumber, messageText, sendReply, msg = null) {
+  if (!checkThrottle(waNumber)) {
+    logger.warn(`[Throttle] WA ${waNumber} mengirim pesan terlalu cepat, diabaikan.`);
+    return;
+  }
+
   // Anti-spam lock dengan auto-expiry (Item 7)
   if (!acquireLock(waNumber)) {
     return;
   }
 
   try {
-    const text = messageText.trim();
-    if (!text) return;
+    const text = (messageText || '').trim();
+    if (!text && !(msg?.hasMedia && msg.type === 'image')) return;
 
     // Batasi panjang input dan sanitasi karakter berbahaya (Unicode control & formatting chars)
     let safeText = text.length > 500 ? text.substring(0, 500) : text;
@@ -653,14 +799,14 @@ async function handleMessage(waNumber, messageText, sendReply) {
           const sd = data.staffData || {};
           const nip = sd.employeeId || data.nip || '';
           const nama = sd.name || data.staffName || '';
-          const akun = sd.loginName || data.userAccount || '';
+          const akun = data.userAccount || sd.loginName || '';
           const unit = sd.department || data.department || '';
           const jab = sd.jobTitle || data.jabatan || '';
           const rows = [];
           if (data.appName) rows.push(`*Nama Aplikasi* : ${data.appName}`);
           if (nip)          rows.push(`*Nomor Induk Pegawai* : ${nip}`);
           if (nama)         rows.push(`*Nama Lengkap* : ${nama}`);
-          if (akun)         rows.push(`*User Account* : ${akun}`);
+          if (akun)         rows.push(`*Username Aplikasi* : ${akun}`);
           if (unit)         rows.push(`*Unit/Bidang/Bagian* : ${unit}`);
           if (jab)          rows.push(`*Jabatan* : ${jab}`);
           rows.push(         `*No. Tiket* : ${data.requestId}`);
@@ -709,6 +855,80 @@ async function handleMessage(waNumber, messageText, sendReply) {
 
     const session = getSession(waNumber);
 
+    if (msg?.hasMedia && msg.type === 'image') {
+      if (![STATE.FILLING_FORM, STATE.CONFIRMING].includes(session.state)) {
+        if (!safeText) {
+          await sendReply('Silakan pilih kategori dan isi formulir terlebih dahulu sebelum mengirim foto.');
+          return;
+        }
+        // Ada teks tapi state tidak tepat untuk media — lanjutkan proses teks saja, abaikan media
+      } else {
+        // ── Download Media: dua metode berurutan ───────────────────────────
+        // Metode 1: downloadMedia() via library (Puppeteer + WA Web internal)
+        // Metode 2: downloadMediaDirect() via HTTPS + AES-256-CBC Node.js (bypass Puppeteer)
+        let media = null;
+
+        // --- Metode 1: Library standar ---
+        try {
+          media = await msg.downloadMedia();
+          if (media) {
+            logger.info(`[Handler] ✓ downloadMedia() library berhasil dari ${waNumber}`);
+          }
+        } catch (err) {
+          logger.warn(`[Handler] downloadMedia() library gagal dari ${waNumber} | Error asli: ${err.message || String(err)}`);
+        }
+
+        // --- Metode 2: Direct HTTPS + decrypt (fallback jika library gagal) ---
+        if (!media && msg._data) {
+          logger.info(`[Handler] Mencoba downloadMediaDirect() (bypass Puppeteer) untuk ${waNumber}...`);
+          try {
+            media = await downloadMediaDirect(msg._data);
+            if (media) {
+              logger.info(`[Handler] ✓ downloadMediaDirect() berhasil dari ${waNumber}`);
+            }
+          } catch (err) {
+            logger.error(`[Handler] downloadMediaDirect() gagal untuk ${waNumber} | Error: ${err.message || String(err)}`);
+          }
+        }
+
+        // --- Simpan media ke session atau beri peringatan ---
+        if (media) {
+          const mediaBytes = Buffer.byteLength(media.data || '', 'base64');
+          if (['image/jpeg', 'image/png'].includes(media.mimetype) && mediaBytes <= 5 * 1024 * 1024) {
+            session.media = {
+              data: media.data,
+              mimetype: media.mimetype,
+              filename: media.filename
+            };
+            sessions.set(waNumber, session);
+            saveSessions(sessions);
+            logger.info(`[Handler] Media foto tersimpan ke session ${waNumber} — ${Math.round(mediaBytes / 1024)}KB`);
+
+            if (!safeText) {
+              await sendReply('Foto diterima ✅ dan akan dilampirkan pada tiket setelah Anda mengonfirmasi pengajuan.\n\n_Ketik *OKE* untuk mengirim tiket beserta fotonya._');
+              return;
+            }
+          } else {
+            logger.warn(`[Handler] Media tidak valid (mimetype: ${media.mimetype}, size: ${Buffer.byteLength(media.data || '', 'base64')}) dari ${waNumber}`);
+            if (!safeText) {
+              await sendReply('Foto tidak dapat digunakan. Kirim file JPG/PNG dengan ukuran maksimal 5 MB.');
+              return;
+            }
+          }
+        } else {
+          // Kedua metode gagal
+          logger.error(`[Handler] SEMUA metode download gagal untuk ${waNumber} — foto tidak akan dilampirkan.`);
+          if (!safeText) {
+            await sendReply('⚠️ Foto gagal diunduh dari sistem WhatsApp. Silakan coba kirim ulang foto Anda.');
+            return;
+          }
+          await sendReply('⚠️ Foto gagal diunduh, tapi data form Anda tetap diproses.\n_Anda bisa mengirim ulang foto setelah konfirmasi jika diperlukan._');
+        }
+      }
+    }
+
+    if (!safeText) return;
+
     // ─── Keyword Global: Reset / Batal / Menu ────────────────────────────
     // Semua keyword dicek secara case-insensitive via normalisasi ke lowercase
     const lowerText = safeText.toLowerCase().trim();
@@ -751,14 +971,15 @@ async function handleMessage(waNumber, messageText, sendReply) {
 
       // ═══ STATE: IDLE ═════════════════════════════════════════════════════
       case STATE.IDLE: {
-        // ── Item 2: Cek rate limit saat user mulai sesi baru ─────────────
-        const rateCheck = checkRateLimit(waNumber);
-        if (!rateCheck.allowed) {
+        // ── Cek cooldown salah isi (input error limit) ───────────────────
+        const idleCooldown = checkInputCooldown(waNumber);
+        if (idleCooldown.blocked) {
+          const remainSecs = Math.ceil(idleCooldown.remainingMs / 1000);
           await sendReply(
-            ` *Batas request server tercapai.*\n\n` +
-            `Sistem sedang menerima batas maksimal ${MAX_TICKETS_PER_WINDOW} request per menit.\n` +
-            `Silakan coba lagi dalam *${rateCheck.resetIn}*.\n\n` +
-            `Terima kasih atas pengertiannya.`
+            `⏳ *Anda sedang dalam masa jeda.*\n\n` +
+            `Anda telah melakukan kesalahan pengisian sebanyak ${INPUT_ERROR_MAX} kali.\n` +
+            `Silakan coba lagi dalam *${remainSecs} detik*.\n\n` +
+            `Anda akan mendapat pemberitahuan otomatis saat jeda selesai.`
           );
           return;
         }
@@ -827,15 +1048,46 @@ async function handleMessage(waNumber, messageText, sendReply) {
       case STATE.FILLING_FORM: {
         const config = CATEGORY_CONFIG[session.category];
 
+        // ── Cek cooldown salah isi sebelum proses apapun ──────────────────
+        const formCooldown = checkInputCooldown(waNumber);
+        if (formCooldown.blocked) {
+          const remainSecs = Math.ceil(formCooldown.remainingMs / 1000);
+          await sendReply(
+            `⏳ *Anda sedang dalam masa jeda.*\n\n` +
+            `Anda telah melakukan kesalahan pengisian sebanyak ${INPUT_ERROR_MAX} kali.\n` +
+            `Silakan coba lagi dalam *${remainSecs} detik*.\n\n` +
+            `Anda akan mendapat pemberitahuan otomatis saat jeda selesai.`
+          );
+          return;
+        }
+
         // Parse balasan user berformat numbered list
-        const parsed = parseNumberedList(safeText, config.fields.length);
+        // Hitung indeks field nullable (opsional) dari config
+        const nullableFields = config.nullableFields || [];
+        const nullableIndices = new Set(
+          nullableFields.map(f => config.fields.indexOf(f)).filter(i => i >= 0)
+        );
+        const parsed = parseNumberedList(safeText, config.fields.length, nullableIndices);
 
         if (!parsed) {
-          // Format tidak dikenali — kirim ulang prompt
-          await sendReply(
-            ` Format tidak dikenali. Mohon isi semua data dengan format nomor urut.\n\n` +
-            buildAllFieldsPrompt(config)
-          );
+          // Format tidak dikenali — hitung sebagai 1 kesalahan
+          const errResult = incrementInputError(waNumber);
+          const rec = getInputErrorRecord(waNumber);
+          const errCount = errResult.cooldownActivated ? INPUT_ERROR_MAX : rec.errorCount;
+
+          if (errResult.cooldownActivated) {
+            await sendReply(
+              `⏳ *Terlalu banyak kesalahan pengisian (${INPUT_ERROR_MAX}x).*\n\n` +
+              `Sistem memberikan jeda *1 menit* sebelum Anda dapat mencoba kembali.\n` +
+              `Anda akan mendapat pemberitahuan otomatis saat jeda selesai.`
+            );
+          } else {
+            await sendReply(
+              `⚠️ Format tidak dikenali. Mohon isi semua data dengan format nomor urut.\n` +
+              `_(Percobaan salah: ${errCount}/${INPUT_ERROR_MAX} — ${INPUT_ERROR_MAX - errCount} kesempatan tersisa)_\n\n` +
+              buildAllFieldsPrompt(config)
+            );
+          }
           return;
         }
 
@@ -860,10 +1112,24 @@ async function handleMessage(waNumber, messageText, sendReply) {
         }
 
         if (errors.length > 0) {
-          await sendReply(
-            ` Ada data yang perlu diperbaiki:\n\n${errors.join('\n')}\n\n` +
-            buildAllFieldsPrompt(config)
-          );
+          // Hitung sebagai 1 kesalahan input
+          const errResult = incrementInputError(waNumber);
+          const rec = getInputErrorRecord(waNumber);
+          const errCount = errResult.cooldownActivated ? INPUT_ERROR_MAX : rec.errorCount;
+
+          if (errResult.cooldownActivated) {
+            await sendReply(
+              `⏳ *Terlalu banyak kesalahan pengisian (${INPUT_ERROR_MAX}x).*\n\n` +
+              `Sistem memberikan jeda *1 menit* sebelum Anda dapat mencoba kembali.\n` +
+              `Anda akan mendapat pemberitahuan otomatis saat jeda selesai.`
+            );
+          } else {
+            await sendReply(
+              `⚠️ Ada data yang perlu diperbaiki:\n\n${errors.join('\n')}\n` +
+              `_(Percobaan salah: ${errCount}/${INPUT_ERROR_MAX} — ${INPUT_ERROR_MAX - errCount} kesempatan tersisa)_\n\n` +
+              buildAllFieldsPrompt(config)
+            );
+          }
           return;
         }
 
@@ -871,28 +1137,43 @@ async function handleMessage(waNumber, messageText, sendReply) {
         session.data = newData;
         sessions.set(waNumber, session);
         saveSessions(sessions);
-        await sendReply(' Memvalidasi email...');
+        await sendReply('⏳ Memvalidasi email...');
 
         // ── Langkah 1: GET /api/v3/users — cek email terdaftar ─────────────
         const lookupResult = await lookupUserByEmail(newData.requester);
 
         if (!lookupResult.found) {
           logger.warn(`[Handler]  Email tidak terdaftar: ${newData.requester}`);
+          // Hitung sebagai 1 kesalahan input (email salah = data tidak valid)
+          const errResult = incrementInputError(waNumber);
+          const rec = getInputErrorRecord(waNumber);
+          const errCount = errResult.cooldownActivated ? INPUT_ERROR_MAX : rec.errorCount;
+
           session.state = STATE.FILLING_FORM;
           session.data = {};
           sessions.set(waNumber, session);
           saveSessions(sessions);
 
-          await sendReply(
-            ` *Email tidak terdaftar di sistem PLN.*\n\n` +
-            `Email *${newData.requester}* tidak ditemukan di database ManageEngine.\n` +
-            `Pastikan email yang Anda gunakan adalah email kantor yang terdaftar.\n\n` +
-            buildAllFieldsPrompt(config)
-          );
+          if (errResult.cooldownActivated) {
+            await sendReply(
+              `⏳ *Terlalu banyak kesalahan pengisian (${INPUT_ERROR_MAX}x).*\n\n` +
+              `Sistem memberikan jeda *1 menit* sebelum Anda dapat mencoba kembali.\n` +
+              `Anda akan mendapat pemberitahuan otomatis saat jeda selesai.`
+            );
+          } else {
+            await sendReply(
+              `⚠️ *Email tidak terdaftar di sistem PLN.*\n\n` +
+              `Email *${newData.requester}* tidak ditemukan di database ManageEngine.\n` +
+              `Pastikan email yang Anda gunakan adalah email kantor yang terdaftar.\n` +
+              `_(Percobaan salah: ${errCount}/${INPUT_ERROR_MAX} — ${INPUT_ERROR_MAX - errCount} kesempatan tersisa)_\n\n` +
+              buildAllFieldsPrompt(config)
+            );
+          }
           return;
         }
 
-        // Langkah 2: Email valid — simpan data user terverifikasi
+        // Langkah 2: Email valid — simpan data user terverifikasi & reset error counter
+        resetInputError(waNumber);
         session.verifiedUser = lookupResult.user;
         // Simpan nama dan departemen ke session.data agar bisa ditampilkan di konfirmasi
         session.data.requester_name = lookupResult.user.name || '';
@@ -939,6 +1220,22 @@ async function handleMessage(waNumber, messageText, sendReply) {
         const upperText = safeText.toUpperCase().trim();
 
         if (['YA', 'Y', 'YES', 'BENAR', 'OKE', 'OK'].includes(upperText)) {
+          // ── Cek duplikat tiket (Item 8) ────────────────────────────────────
+          const payloadStr = JSON.stringify(session.data);
+          const fingerprint = `${waNumber}:${payloadStr}`;
+          const dupReservation = duplicateTicketGuard.reserve(fingerprint);
+          if (!dupReservation) {
+            logger.warn(`[Duplicate] WA ${waNumber} mencoba mengirim tiket duplikat`);
+            await sendReply(
+              `🚫 *Tiket Duplikat Terdeteksi.*\n` +
+              `Anda baru saja mengirimkan permintaan dengan data yang persis sama.\n` +
+              `Sistem mengabaikan permintaan ini untuk mencegah duplikasi di ManageEngine.\n\n` +
+              `Silakan ketik *menu* untuk mengajukan request baru.`
+            );
+            resetSession(waNumber);
+            return;
+          }
+
           await sendReply(' Sedang mengirim tiket ke server PLN...');
 
           try {
@@ -960,8 +1257,23 @@ async function handleMessage(waNumber, messageText, sendReply) {
             const verifiedUser = session.verifiedUser || {};
 
             if (result.success) {
+              // ── Upload Attachment jika ada ─────────────────────────────────
+              let attachmentSuccess = true;
+              if (result.requestId && session.media) {
+                const uploadResult = await uploadAttachment(result.requestId, session.media);
+                if (!uploadResult.success) {
+                  attachmentSuccess = false;
+                  logger.error(`[Handler] uploadAttachment gagal untuk tiket ${result.requestId} | Error asli: ${uploadResult.error || 'Unknown error'}`);
+                } else {
+                  logger.info(`[Handler] ✓ uploadAttachment berhasil untuk tiket ${result.requestId}`);
+                }
+                // Bersihkan media setelah diupload
+                session.media = null;
+              }
+
               // Tampilkan nomor tiket ManageEngine agar user bisa tracking
-              incrementRateLimit(waNumber);
+              const _emailForLimit = (session.verifiedUser?.email || session.data?.requester || waNumber);
+              incrementRateLimit(waNumber, _emailForLimit);
               const ticketRef = result.requestId ? ` No. Tiket : ${result.requestId}\n` : '';
 
               // ── Daftarkan tiket ke notification service ─────────────────────
@@ -977,12 +1289,16 @@ async function handleMessage(waNumber, messageText, sendReply) {
                 ...(result.requestId  ? [`*No. Tiket* : ${result.requestId}`] : []),
                 `*Status* : Dikirim ke sistem IT PLN Batam`,
               ].join('\n');
-              await sendReply(
-                ` *Request berhasil dikirim!*\n\n` +
-                successLines +
-                `\n\nTerima kasih telah menggunakan IT Service Desk Bot. ` +
-                `Ketik *menu* kapan saja untuk mengajukan request baru.`
-              );
+              
+              let replyMsg = `✅ *Request berhasil dikirim!*\n\n` + successLines;
+              
+              if (!attachmentSuccess) {
+                replyMsg += `\n\n⚠️ *Catatan:* Tiket terkirim, tetapi foto gagal diunggah ke sistem.`;
+              }
+              
+              replyMsg += `\n\nTerima kasih telah menggunakan IT Service Desk Bot. Ketik *menu* kapan saja untuk mengajukan request baru.`;
+              
+              await sendReply(replyMsg);
             } else {
               await sendReply(
                 ` *Request gagal dikirim ke server PLN.*\n\n` +

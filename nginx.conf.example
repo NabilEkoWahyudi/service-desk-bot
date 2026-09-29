@@ -1,6 +1,6 @@
 # ──────────────────────────────────────────────────────────────
 # NGINX CONFIGURATION EXAMPLE — IT Service Desk Bot PLN Batam
-# Item 3: Setup HTTPS dengan NGINX sebagai reverse proxy
+# Item 9: limit_req_zone di konteks http (bukan global/server)
 # ──────────────────────────────────────────────────────────────
 #
 # CARA PENGGUNAAN:
@@ -11,7 +11,25 @@
 # 5. Enable: sudo ln -s /etc/nginx/sites-available/helpdesk-bot /etc/nginx/sites-enabled/
 # 6. Test: sudo nginx -t
 # 7. Reload: sudo systemctl reload nginx
+#
+# CATATAN PENTING (Item 9 Best Practice):
+# limit_req_zone HARUS berada di dalam konteks http {}, BUKAN di level global.
+# Jika diletakkan di luar http {}, NGINX akan menolak konfigurasi dengan error:
+#   "limit_req_zone" directive is not allowed here
+# File ini adalah include dari /etc/nginx/nginx.conf yang memiliki blok http {}
+# — JANGAN tambahkan blok http {} duplikat jika sudah ada di nginx.conf utama.
 # ──────────────────────────────────────────────────────────────
+
+# ─── Rate Limiting ──────────────────────────────────────────────────────────
+# WAJIB berada di dalam konteks http {} — lihat catatan di atas.
+# Gunakan memory zone 10MB ($binary_remote_addr = 7 byte/entry → ~130.000 IP unik).
+#
+# Zona terpisah untuk endpoint berbeda:
+#   api_general : untuk endpoint umum (/health, /wa-status, dll)  → 30 r/m
+#   api_webhook  : untuk webhook ManageEngine (/webhook/*)         → 60 r/m
+#                  (ManageEngine dapat kirim notif setiap ada update tiket)
+limit_req_zone $binary_remote_addr zone=api_general:10m rate=30r/m;
+limit_req_zone $binary_remote_addr zone=api_webhook:10m rate=60r/m;
 
 # Redirect HTTP → HTTPS
 server {
@@ -40,12 +58,11 @@ server {
     add_header X-XSS-Protection "1; mode=block";
     add_header Strict-Transport-Security "max-age=31536000" always;
 
-    # Rate Limiting (NGINX level) — max 10 request/menit per IP
-    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/m;
-    limit_req zone=api burst=5 nodelay;
-
-    # Proxy ke Node.js Bot (berjalan di port 3000)
-    location / {
+    # ── Webhook ManageEngine (limit lebih longgar: 60 r/m) ─────────────────
+    # ManageEngine push notification dapat terjadi setiap ada update tiket.
+    # burst=10 nodelay: izinkan lonjakan hingga 10 request tanpa antri.
+    location ~ ^/webhook/ {
+        limit_req zone=api_webhook burst=10 nodelay;
         proxy_pass         http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
@@ -55,7 +72,20 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # Hanya izinkan endpoint /health dan /webhook/reply dari luar
+    # ── Endpoint umum (30 r/m) ──────────────────────────────────────────────
+    # burst=20 nodelay: izinkan burst wajar tanpa antri.
+    location / {
+        limit_req zone=api_general burst=20 nodelay;
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Hanya izinkan endpoint /health dan /webhook/* dari luar
     # Endpoint lain diblokir jika perlu (uncomment untuk keamanan ekstra)
     # location ~* ^/((?!health|webhook).)*$ {
     #     deny all;

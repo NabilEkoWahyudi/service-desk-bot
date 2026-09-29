@@ -163,7 +163,7 @@ function buildApprovalRequestMsg(requestId, ticketDescription, approvalItem) {
   const namaAplikasi = approvalItem?.appName || '';
   const nip          = sd.employeeId || approvalItem?.nip || '';
   const namaLengkap  = sd.name || approvalItem?.staffName || '';
-  const userAccount  = sd.loginName || approvalItem?.userAccount || '';
+  const userAccount  = approvalItem?.userAccount || sd.loginName || '';
   const unitBidang   = sd.department || approvalItem?.department || '';
   const jabatan      = sd.jobTitle || approvalItem?.jabatan || '';
 
@@ -172,7 +172,7 @@ function buildApprovalRequestMsg(requestId, ticketDescription, approvalItem) {
   if (namaAplikasi) lines.push(`*Nama Aplikasi* : ${namaAplikasi}`);
   if (nip)          lines.push(`*Nomor Induk Pegawai* : ${nip}`);
   if (namaLengkap)  lines.push(`*Nama Lengkap* : ${namaLengkap}`);
-  if (userAccount)  lines.push(`*User Account* : ${userAccount}`);
+  if (userAccount)  lines.push(`*Username Aplikasi* : ${userAccount}`);
   if (unitBidang)   lines.push(`*Unit/Bidang/Bagian* : ${unitBidang}`);
   if (jabatan)      lines.push(`*Jabatan* : ${jabatan}`);
   lines.push(       `*No. Tiket* : ${requestId}`);
@@ -211,7 +211,7 @@ function buildSystemNotifMsg(requestId, notif, ticketDesc, staffData = null) {
   const lines = [];
   if (sd.name || '')         lines.push(`*Nama Pegawai* : ${sd.name}`);
   if (sd.employeeId || '')   lines.push(`*Nomor Induk Pegawai* : ${sd.employeeId}`);
-  if (sd.loginName || '')    lines.push(`*User Account* : ${sd.loginName}`);
+  if (sd.loginName || '')    lines.push(`*Username Aplikasi* : ${sd.loginName}`);
   if (sd.department || '')   lines.push(`*Unit/Bidang/Bagian* : ${sd.department}`);
   if (sd.jobTitle || '')     lines.push(`*Jabatan* : ${sd.jobTitle}`);
   lines.push(                     `*No. Tiket* : ${requestId}`);
@@ -269,90 +269,98 @@ function extractFieldValue(text, fieldNames) {
 
 /**
  * Format objek notifikasi ManageEngine menjadi pesan WhatsApp yang bersih.
- * Hanya menampilkan field relevan per kategori:
- *   Semua       : Nama Pegawai, Keterangan
- *   Password    : + Username, Password
- *   Autorisasi  : + Username, Autorisasi/Hak Akses
- *   Keluhan IT  : + Tindakan/Solusi
- *   Akses VPN   : + Username, Password/Info VPN
+ * Hanya menampilkan field relevan per kategori dan HANYA jika ada nilainya.
+ *
+ * @param {string}      requestId
+ * @param {object}      notif       - Objek notifikasi dari ManageEngine
+ * @param {string}      ticketDesc  - Deskripsi tiket asli (dipakai sebagai fallback)
+ * @param {object|null} staffData   - Data user dari info.staffData (sumber utama)
  */
-function formatNotificationMessage(requestId, notif, ticketDesc) {
+function formatNotificationMessage(requestId, notif, ticketDesc, staffData = null) {
   const subject       = notif.subject        || notif.request?.subject || '-';
   const ticketSubject = notif.request?.subject || subject;
 
-  // Ekstrak data user dari deskripsi asli tiket
-  const rawDescBody = typeof ticketDesc === 'string' ? ticketDesc : (ticketDesc?.description || '');
-  const plainDescBody = rawDescBody
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<p[^>]*>/gi,   '\n')
-    .replace(/<\/p>/gi,      '')
-    .replace(/<[^>]+>/g,     '')
-    .replace(/&nbsp;/gi,  ' ')
-    .replace(/&amp;/gi,   '&')
-    .replace(/&lt;/gi,    '<')
-    .replace(/&gt;/gi,    '>')
-    .replace(/&quot;/gi,  '"')
-    .replace(/&#39;/gi,   "'")
-    .replace(/\n{3,}/g,   '\n\n')
-    .trim();
+  // ── Sumber data user: staffData (dari session/API) — paling akurat ─────────
+  // Jika staffData tersedia, gunakan langsung tanpa parsing HTML deskripsi.
+  // Ini menghindari masalah regex menangkap nilai yang salah dari template form.
+  let namaAplikasi = '', nip = '', namaLengkap = '', userAccount = '', jabatan = '';
 
-  const namaAplikasi = extractFieldValue(plainDescBody, ['Nama Aplikasi', 'Aplikasi']) || '';
-  const nip          = extractFieldValue(plainDescBody, ['Nomor Induk Pegawai', 'NIP']) || '';
-  const namaLengkap  = extractFieldValue(plainDescBody, ['Nama Lengkap', 'Nama Pegawai']) || '';
-  const userAccount  = extractFieldValue(plainDescBody, ['User Account', 'Username', 'User Name', 'Akun']) || '';
-  const unitBidang   = extractFieldValue(plainDescBody, ['Unit/Bidang/Bagian', 'Unit Bidang', 'Bagian', 'Unit', 'Departemen']) || '';
-  const jabatan      = extractFieldValue(plainDescBody, ['Jabatan']) || '';
+  if (staffData) {
+    namaAplikasi = staffData.appName   || '';  // appName disimpan di info, bukan staffData
+    nip          = staffData.employeeId || '';
+    namaLengkap  = staffData.name       || '';
+    userAccount  = staffData.loginName  || '';
+    jabatan      = staffData.jobTitle   || staffData.jobtitle || '';
+  } else {
+    // Fallback: parsing dari deskripsi tiket (kurang akurat, dipakai hanya jika staffData kosong)
+    const rawDescBody = typeof ticketDesc === 'string' ? ticketDesc : (ticketDesc?.description || '');
+    const plainDescBody = rawDescBody
+      .replace(/<br\s*\/?>/gi, '\n').replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '')
+      .replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'").replace(/\n{3,}/g, '\n\n').trim();
 
-  // Body dari balasan admin
+    // Ambil hanya baris yang berformat "Label : Nilai" sederhana — lewati baris yang masih mengandung "*"
+    // (baris template form seperti "Nama Aplikasi * :" harus diabaikan)
+    const cleanLines = plainDescBody.split('\n').filter(l => !l.includes('*') && l.includes(':'));
+    const cleanText  = cleanLines.join('\n');
+
+    namaLengkap  = extractFieldValue(cleanText, ['Nama Lengkap', 'Nama Pegawai']) || '';
+    nip          = extractFieldValue(cleanText, ['Nomor Induk Pegawai', 'NIP', 'Employee ID']) || '';
+    userAccount  = extractFieldValue(cleanText, ['User Account', 'Username']) || '';
+    jabatan      = extractFieldValue(cleanText, ['Jabatan']) || '';
+  }
+
+  // ── Konten balasan dari admin (badan notifikasi) ──────────────────────────
   const rawBody = notif.description || notif.body || notif.content || notif.message || '';
   const plainBody = rawBody
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<p[^>]*>/gi,   '\n')
-    .replace(/<\/p>/gi,      '')
-    .replace(/<[^>]+>/g,     '')
-    .replace(/&nbsp;/gi,  ' ')
-    .replace(/&amp;/gi,   '&')
-    .replace(/&lt;/gi,    '<')
-    .replace(/&gt;/gi,    '>')
-    .replace(/&quot;/gi,  '"')
-    .replace(/&#39;/gi,   "'")
-    .replace(/\n{3,}/g,   '\n\n')
-    .trim();
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '')
+    .replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'").replace(/\n{3,}/g, '\n\n').trim();
 
-  const password    = extractFieldValue(plainBody, ['Password', 'Sandi']);
-  const autorisasi  = extractFieldValue(plainBody, ['Autorisasi', 'Otorisasi', 'Hak Akses', 'Role', 'Akses']);
-  const tindakan    = extractFieldValue(plainBody, ['Tindakan', 'Solusi', 'Penyelesaian', 'Resolusi', 'Perbaikan']);
-  const vpnInfo     = extractFieldValue(plainBody, ['Alamat VPN', 'Server VPN', 'VPN']);
-  const keterangan  = extractFieldValue(plainBody, ['Keterangan', 'Catatan', 'Notes', 'Note', 'Deskripsi']);
+  // Hanya ambil baris pertama dari body yang bermakna sebagai balasan admin
+  // (bukan re-paste konten form tiket yang panjang)
+  const balasanLines = plainBody.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !l.includes('Nomor Tiket') && !l.includes('No. Tiket'));
 
-  // Format *Label* : value — mobile-friendly, tanpa padding
+  // Cek apakah ada password / autorisasi / tindakan / VPN dari body
+  const password   = extractFieldValue(plainBody, ['Password', 'Sandi']);
+  const autorisasi = extractFieldValue(plainBody, ['Autorisasi', 'Otorisasi', 'Hak Akses']);
+  const tindakan   = extractFieldValue(plainBody, ['Tindakan', 'Solusi', 'Penyelesaian', 'Resolusi', 'Perbaikan']);
+  const vpnInfo    = extractFieldValue(plainBody, ['Alamat VPN', 'Server VPN', 'VPN']);
+
+  // Format *Label* : value — HANYA baris yang ada nilainya (baris kosong tidak ditampilkan)
   const fieldLines = [];
-  fieldLines.push(`*Nama Aplikasi* : ${namaAplikasi}`);
-  fieldLines.push(`*Nomor Induk Pegawai* : ${nip}`);
-  fieldLines.push(`*Nama Lengkap* : ${namaLengkap}`);
-  fieldLines.push(`*User Account* : ${userAccount}`);
-  fieldLines.push(`*Unit/Bidang/Bagian* : ${unitBidang}`);
-  fieldLines.push(`*Jabatan* : ${jabatan}`);
-
-  if (password)    fieldLines.push(`*Password* : ${password}`);
-  if (autorisasi)  fieldLines.push(`*Autorisasi* : ${autorisasi}`);
-  if (tindakan)    fieldLines.push(`*Tindakan* : ${tindakan}`);
-  if (vpnInfo)     fieldLines.push(`*Info VPN* : ${vpnInfo}`);
-  if (keterangan)  fieldLines.push(`*Keterangan* : ${keterangan}`);
+  if (namaAplikasi) fieldLines.push(`*Nama Aplikasi* : ${namaAplikasi}`);
+  if (nip)          fieldLines.push(`*Nomor Induk Pegawai* : ${nip}`);
+  if (namaLengkap)  fieldLines.push(`*Nama Lengkap* : ${namaLengkap}`);
+  if (userAccount)  fieldLines.push(`*Username Aplikasi* : ${userAccount}`);
+  if (jabatan)      fieldLines.push(`*Jabatan* : ${jabatan}`);
+  if (password)     fieldLines.push(`*Password* : ${password}`);
+  if (autorisasi)   fieldLines.push(`*Autorisasi* : ${autorisasi}`);
+  if (tindakan)     fieldLines.push(`*Tindakan* : ${tindakan}`);
+  if (vpnInfo)      fieldLines.push(`*Info VPN* : ${vpnInfo}`);
 
   let msg =
     `*No. Tiket* : *${requestId}*\n` +
     `*Judul* : ${ticketSubject}`;
 
   if (fieldLines.length > 0) {
-    msg +=
-      `\n\n---\n` +
-      fieldLines.join('\n');
-  } else if (plainBody) {
-    const preview = plainBody.length > 500
-      ? plainBody.substring(0, 500) + '\n...(pesan terpotong)'
-      : plainBody;
-    msg += `\n\n *Pesan:*\n${preview}`;
+    msg += `\n\n---\n` + fieldLines.join('\n');
+  }
+
+  // Tampilkan pesan balasan admin jika ada dan tidak sama dengan konten form
+  if (balasanLines.length > 0) {
+    // Batasi panjang dan filter agar tidak menampilkan ulang seluruh form tiket
+    const relevantLines = balasanLines.filter(l =>
+      !l.match(/^(Aplikasi|Judul|Nomor Tiket|Formulir|OPS TI|Komitmen|Dengan ini|PERMINTAAN|Lokasi|Unit\/Bidang)\b/i)
+    );
+    if (relevantLines.length > 0) {
+      const preview = relevantLines.slice(0, 10).join('\n');
+      msg += `\n\n *Balasan:*\n${preview}`;
+    }
   }
 
   msg +=
@@ -441,6 +449,31 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
       // type lainnya                 → kirim ke WA PEGAWAI (format default)
 
       let targetWa, msg;
+
+      // PENTING: ManageEngine kadang membuat notifikasi type='reply' atau 'system_notification' yang isinya
+      // adalah email approval request ke atasan. Ini TIDAK boleh diteruskan ke employee pembuat tiket.
+      // Cek body notifikasi: jika mengandung penanda approval email dan BUKAN notif type='approval', skip.
+      if (notifType !== 'approval') {
+        const notifBodyRaw = (notif.description || notif.body || notif.content || notif.message || '')
+          .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ');
+
+        const isApprovalEmail = [
+          '$ApprovalLink', '_approve', '_reject',
+          'memerlukan persetujuan', 'Notifikasi Persetujuan',
+          'agar dapat ditindaklanjuti', 'persetujuan Anda'
+        ].some(kw => notifBodyRaw.toLowerCase().includes(kw.toLowerCase()));
+
+        if (isApprovalEmail) {
+          // Ini email persetujuan yang ditujukan ke atasan — jangan teruskan ke employee
+          info.seenIds.add(notifId);
+          anyNew = true;
+          logger.info(
+            `[Notif] Notifikasi #${notifId} tiket ${requestId} di-skip ` +
+            `(konten approval email, tidak relevan untuk pegawai).`
+          );
+          continue;
+        }
+      }
 
       if (notifType === 'approval') {
         // Cek apakah atasan sudah terdaftar di pending approvals (anti-duplikat)
@@ -647,9 +680,14 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
         logger.info(`[Notif] Notifikasi system #${notifId} tiket ${requestId} → WA pegawai ${targetWa}`);
 
       } else {
-        // Notifikasi lain (balasan admin, dsb) → ke pegawai dengan format default
+        // Notifikasi lain (balasan admin, dsb) — forward ke pegawai dengan format bersih.
+        // Gunakan staffData dari info (sumber terpercaya) bukan parsing HTML description.
+        // Sisipkan appName ke staffData sementara karena formatter memerlukannya.
+        const staffDataWithApp = info.staffData
+          ? { ...info.staffData, appName: info.appName || '' }
+          : (info.appName ? { appName: info.appName } : null);
         targetWa = info.waNumber;
-        msg      = formatNotificationMessage(requestId, notif, ticketDesc);
+        msg      = formatNotificationMessage(requestId, notif, ticketDesc, staffDataWithApp);
         logger.info(`[Notif] Notifikasi #${notifId} (type: ${notifType || 'unknown'}) tiket ${requestId} → WA ${targetWa}`);
       }
 

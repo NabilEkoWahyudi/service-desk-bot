@@ -291,7 +291,7 @@ async function checkAndSendReminders() {
       `*Nama Aplikasi* : ${oldest.appName || ''}`,
       `*Nomor Induk Pegawai* : ${oldest.nip || ''}`,
       `*Nama Lengkap* : ${oldest.staffName || ''}`,
-      `*User Account* : ${oldest.userAccount || ''}`,
+      `*Username Aplikasi* : ${oldest.userAccount || ''}`,
       `*Unit/Bidang/Bagian* : ${oldest.department || ''}`,
       `*Jabatan* : ${oldest.jabatan || ''}`,
       `*No. Tiket* : ${oldest.requestId}`,

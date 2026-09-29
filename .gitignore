@@ -89,3 +89,9 @@ ServiceDesk Plus On Premise.postman_collection.json
 
 # ── Generated assets (di-generate ulang saat deploy) ─────────────
 src/assets/
+# --- Dokumen Internal ---
+best_practice.md
+
+# --- Folder Testing / Bukti ---
+prove_test/
+prove_test*

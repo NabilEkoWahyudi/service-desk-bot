@@ -141,24 +141,128 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
   // ─── Baris khusus per kategori ────────────────────────────────────────────────
   let categorySpecificRow = '';
 
-  if (category === 'PASSWORD' || category === 'AUTORISASI') {
-    // ── Reset Password & Otorisasi: tampilkan Nama Aplikasi ──
-    const appName = escapeHtml(data.nama_aplikasi || '-');
-    categorySpecificRow = labelRow('Nama Aplikasi', appName, true);
+  if (category === 'PASSWORD') {
+    // ── Reset Password: tampilkan Nama Aplikasi + Username Aplikasi ──
+    const appName      = escapeHtml(data.nama_aplikasi      || '-');
+    const usernameApps = escapeHtml(data.username_aplikasi  || '-');
+    categorySpecificRow =
+      labelRow('Nama Aplikasi',      appName) +
+      labelRow('Username Aplikasi',  usernameApps, true);
+
+  } else if (category === 'AUTORISASI') {
+    // ── Otorisasi: Nama Aplikasi + Username Aplikasi + Alasan + Tabel 2 Kolom Role ──
+    const appName        = escapeHtml(data.nama_aplikasi      || '-');
+    const usernameApps   = escapeHtml(data.username_aplikasi  || '-');
+    const alasanOtorisasi = escapeHtml(data.alasan_otorisasi  || '-');
+    // Nilai role: kosong / "-" → tampilkan sel kosong
+    const roleAssign = (data.role_assign && data.role_assign.trim() && data.role_assign.trim() !== '-')
+      ? escapeHtml(data.role_assign.trim()) : '';
+    const roleHapus  = (data.role_hapus  && data.role_hapus.trim()  && data.role_hapus.trim()  !== '-')
+      ? escapeHtml(data.role_hapus.trim())  : '';
+
+    const S_TH_ASSIGN = 'padding:10px 14px;font-weight:700;color:#1565c0;background:#edf5f8;border:1px solid #d6e0e7;text-align:center;width:50%;';
+    const S_TH_HAPUS  = 'padding:10px 14px;font-weight:700;color:#d92d20;background:#fff3f3;border:1px solid #d6e0e7;text-align:center;width:50%;';
+    const S_TD_CELL   = 'padding:9px 14px;border:1px solid #d6e0e7;vertical-align:top;min-height:30px;';
+
+    // Buat 5 baris data — baris pertama diisi nilai user, sisanya kosong
+    const buildRoleRows = () => {
+      const rows = [];
+      for (let r = 0; r < 5; r++) {
+        rows.push(`
+          <tr>
+            <td style="${S_TD_CELL}">${r === 0 ? roleAssign : ''}</td>
+            <td style="${S_TD_CELL}">${r === 0 ? roleHapus  : ''}</td>
+          </tr>`);
+      }
+      return rows.join('');
+    };
+
+    categorySpecificRow =
+      labelRow('Nama Aplikasi',     appName) +
+      labelRow('Username Aplikasi', usernameApps) +
+      // Baris full-width: label Alasan
+      `<tr>
+        <td colspan="5" style="padding:10px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;border-bottom:1px solid #d6e0e7;">
+          <p style="${S_P}">Alasan Pembuatan/Perubahan Otorisasi <span style="${S_REQUIRED}">*</span> :</p>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="5" style="padding:10px 14px;vertical-align:top;color:#39444b;border-bottom:1px solid #d6e0e7;min-height:40px;">
+          <p style="${S_P}">${alasanOtorisasi}</p>
+        </td>
+      </tr>
+      <!-- Tabel 2 kolom Role -->
+      <tr>
+        <td colspan="5" style="padding:0;border-bottom:1px solid #d6e0e7;">
+          <table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="${S_TH_ASSIGN}">Role yang akan <span style="color:#1565c0;">diassign</span> ke User</th>
+                <th style="${S_TH_HAPUS}">Role yang akan <span style="color:#d92d20;">dihapus</span> dari User</th>
+              </tr>
+            </thead>
+            <tbody>${buildRoleRows()}</tbody>
+          </table>
+        </td>
+      </tr>`;
 
   } else if (category === 'KELUHAN') {
-    // ── Permintaan/Keluhan: tampilkan Keluhan yang Dialami ──
-    const keluhanVal = escapeHtml(data.keluhan || '-');
-    categorySpecificRow = labelRow('Keluhan yang Dialami', keluhanVal, true);
+    // ── Permintaan/Keluhan: tampilkan Nama Aplikasi + Username Aplikasi + Keluhan ──
+    const appName      = escapeHtml(data.nama_aplikasi      || '-');
+    const usernameApps = escapeHtml(data.username_aplikasi  || '-');
+    const keluhanVal   = escapeHtml(data.keluhan            || '-');
+    categorySpecificRow =
+      labelRow('Nama Aplikasi',      appName) +
+      labelRow('Username Aplikasi',  usernameApps) +
+      labelRow('Keluhan yang Dialami', keluhanVal, true);
 
   } else if (category === 'VPN') {
-    // ── Akses VPN: tampilkan Alasan Akses VPN ──
+    // ── Akses VPN: tampilkan User Account (email) + Alasan + Tabel Tanggal ──
+    const emailUser = escapeHtml(verifiedUser?.email || data.requester || '-');
     const alasanVal = escapeHtml(data.alasan || '-');
-    categorySpecificRow = labelRow('Alasan Akses VPN', alasanVal, true);
+    const tglAwal   = escapeHtml(data.tgl_awal || '-');
+    const tglAkhir  = escapeHtml(data.tgl_akhir || '-');
+
+    const S_TH_TGL = 'padding:10px 14px;font-weight:700;color:#39444b;background:#cfd8df;border:1px solid #c9d8e2;text-align:center;width:50%;';
+    const S_TD_TGL = 'padding:11px 14px;border:1px solid #c9d8e2;text-align:center;color:#b0bac3;font-weight:600;font-size:15px;';
+    const S_TD_TGL_FILLED = 'padding:11px 14px;border:1px solid #c9d8e2;text-align:center;color:#39444b;font-weight:600;font-size:15px;';
+
+    categorySpecificRow =
+      labelRow('User Account', emailUser) +
+      // Baris full-width: label Alasan
+      `<tr>
+        <td colspan="5" style="padding:10px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;border-bottom:1px solid #d6e0e7;">
+          <p style="${S_P}">Alasan Permintaan Akses VPN <span style="${S_REQUIRED}">*</span> :</p>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="5" style="padding:10px 14px;vertical-align:top;color:#39444b;border-bottom:1px solid #d6e0e7;min-height:40px;">
+          <p style="${S_P}">${alasanVal}</p>
+        </td>
+      </tr>
+      <!-- Tabel 2 kolom Tanggal VPN -->
+      <tr>
+        <td colspan="5" style="padding:0;border-bottom:1px solid #d6e0e7;">
+          <table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="${S_TH_TGL}">Tanggal Awal Akses VPN</th>
+                <th style="${S_TH_TGL}">Tanggal Akhir Akses VPN</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="${tglAwal !== '-' ? S_TD_TGL_FILLED : S_TD_TGL}">${tglAwal !== '-' ? tglAwal : 'dd Bulan yyyy'}</td>
+                <td style="${tglAkhir !== '-' ? S_TD_TGL_FILLED : S_TD_TGL}">${tglAkhir !== '-' ? tglAkhir : 'dd Bulan yyyy'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>`;
   }
 
-  // ─── Baris header NAMA APLIKASI: hanya untuk PASSWORD / AUTORISASI ────────────
-  const appNameHeaderRow = (category === 'PASSWORD' || category === 'AUTORISASI')
+  // ─── Baris header NAMA APLIKASI: hanya untuk PASSWORD / AUTORISASI / KELUHAN ────────────
+  const appNameHeaderRow = (category === 'PASSWORD' || category === 'AUTORISASI' || category === 'KELUHAN')
     ? `
       <tr>
         <td colspan="5" style="padding:11px 14px;vertical-align:middle;background:#f7fafb;border-bottom:1px solid #d6e0e7;">
@@ -226,7 +330,6 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       ${labelRow('Jabatan', jobTitle)}
       ${labelRow('Phone/Ext/HP', phone)}
       ${labelRow('Unit/Bidang/Bagian', department)}
-      ${labelRow('User Account', userAccount)}
       ${categorySpecificRow}
       <tr>
         <td colspan="5"
@@ -249,7 +352,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
  * @param {object|null} verifiedUser - Data user dari ManageEngine lookup
  * @returns {Promise<{ success: boolean, message: string, requestId?: string, ticketDetail?: object }>}
  */
-async function submitToEndpoint(category, data, verifiedUser = null) {
+async function submitToEndpoint(category, data, verifiedUser = null, options = {}) {
   const config = CATEGORY_CONFIG[category];
   if (!config) {
     return { success: false, message: `Kategori tidak valid: ${category}` };
@@ -288,9 +391,28 @@ async function submitToEndpoint(category, data, verifiedUser = null) {
     service_category: { id: meConfig.serviceCategoryId }
   };
 
-  // Jika kategori memerlukan approval otomatis (AUTORISASI), gunakan template khusus
+  // ── Pilih template berdasarkan tipe user ─────────────────────────────────
+  // Untuk AUTORISASI, terdapat dua template:
+  //   1. templateId       (default: 2404) — "Formulir Permintaan Get Approvals"
+  //      → Dipakai user BIASA: memiliki approval level, notif dikirim ke atasan via WA.
+  //   2. seniorTemplateId (default: 2408) — "(Tanpa Approval) Pembuatan atau Perubahan Otorisasi"
+  //      → Dipakai ATASAN (isSenior=true): TIDAK ada approval level, tiket langsung ke teknisi.
+  //        Menggantikan auto-approve via API yang tidak reliabel.
+  const isSeniorUser = options?.isSenior === true;
   if (category === 'AUTORISASI') {
-    requestBody.template = { name: "Formulir Permintaan Get Approvals" };
+    if (isSeniorUser && config.seniorTemplateId) {
+      requestBody.template = { id: config.seniorTemplateId };
+      logger.info(
+        `[Ticket] Template SENIOR (tanpa approval) disertakan: ID=${config.seniorTemplateId} ` +
+        `— tiket atasan langsung ke teknisi tanpa approval workflow.`
+      );
+    } else if (config.templateId) {
+      requestBody.template = { id: config.templateId };
+      logger.info(
+        `[Ticket] Template AUTORISASI (dengan approval) disertakan: ID=${config.templateId} ` +
+        `— notifikasi approval akan dikirim ke atasan.`
+      );
+    }
   }
 
 
@@ -594,15 +716,64 @@ async function lookupUserByEmail(email) {
           logger.warn(`[Lookup] User ID ${u.id} tidak memiliki reporting_to di ManageEngine.`);
         }
 
-        // isSenior: true jika user memiliki org_role 'Reporting To' di ManageEngine.
-        // Artinya user ini adalah atasan bagi orang lain → tidak perlu persetujuan atasan.
-        // Data ini diambil dinamis dari ManageEngine, tidak ada hardcode.
-        const orgRoles = userDetail?.orgRoles || [];
-        isSenior = orgRoles.some(
-          r => (r.name || '').toLowerCase().includes('reporting to') || r.id === 2
-        );
+        // isSenior: true jika jabatan user adalah tingkat manajemen (ASMAN ke atas).
+        // Cek keywords di jobTitle untuk menentukan auto-approve.
+        // PENTING: ManageEngine mengembalikan field 'jobtitle' (huruf kecil) di GET /users/{id},
+        // sehingga kita baca dari userDetail.jobtitle (bukan .jobTitle).
+        const rawJobTitle = userDetail?.jobtitle || userDetail?.jobTitle || '';
+        const jobTitle = rawJobTitle.toUpperCase();
+        logger.info(`[Lookup] User ID ${u.id} — jobTitle dari ME: "${rawJobTitle || '(kosong)'}"`); 
+
+        // Keyword senior: ASMAN (Asisten Manajer) dan ke atas — sesuai hierarki PLN/korporat Indonesia.
+        // Singkatan umum:
+        //   ASMAN / ASMGR / AS MAN / AS. MAN / ASISTEN MAN* → Asisten Manajer (level minimum)
+        //   MAN / MGR / MANAJER / MANAGER               → Manajer
+        //   SM / SR MGR / SENIOR MAN*                   → Senior Manager
+        //   KAMAN / KADIV / KADEP / KABID               → Kepala Divisi / Departemen / Bidang
+        //   GM / GEN MAN*                               → General Manager
+        //   VP / VICE PRES*                             → Vice President
+        //   SVP / SR VP / SENIOR VP                    → Senior Vice President
+        //   EVP / EXC VP / EXEC VP                     → Executive Vice President
+        //   DIR / DIREKTUR / DIRECTOR                  → Direktur
+        //   DIRUT / DIRUTAMA                           → Direktur Utama
+        const seniorKeywords = [
+          // ── Asisten Manajer (level minimum auto-approve) ──────────────────
+          'ASMAN', 'ASMGR', 'AS MAN', 'AS MGR', 'AS. MAN', 'AS. MGR',
+          'ASISTEN MAN', 'ASISTEN MGR', 'ASISTEN MANAGER', 'ASISTEN MANAJER',
+          'ASSISTANT MANAGER', 'ASST MANAGER', 'ASST MGR',
+          // ── Manajer ───────────────────────────────────────────────────────
+          'MANAJER', 'MANAGER', 'MGR', 'MAN',
+          // ── Senior Manager ────────────────────────────────────────────────
+          'SM', 'SR MGR', 'SR MAN', 'SR. MGR', 'SR. MAN',
+          'SENIOR MANAGER', 'SENIOR MANAJER', 'SENIOR MGR',
+          // ── Kepala (Divisi / Departemen / Bidang / Bagian) ────────────────
+          'KADIV', 'KADEP', 'KABAG', 'KABID', 'KAMAN',
+          'KEPALA DIVISI', 'KEPALA DEPARTEMEN', 'KEPALA BIDANG', 'KEPALA BAGIAN',
+          // ── General Manager ───────────────────────────────────────────────
+          'GM', 'GENERAL MANAGER', 'GENERAL MGR',
+          // ── Vice President ────────────────────────────────────────────────
+          'VP', 'VICE PRESIDENT', 'VICE PRES',
+          // ── Senior Vice President ─────────────────────────────────────────
+          'SVP', 'SR VP', 'SR. VP', 'SENIOR VP', 'SENIOR VICE PRESIDENT',
+          // ── Executive Vice President ──────────────────────────────────────
+          'EVP', 'EXC VP', 'EXEC VP', 'EXECUTIVE VICE PRESIDENT',
+          // ── Direktur ──────────────────────────────────────────────────────
+          'DIR', 'DIREKTUR', 'DIRECTOR',
+          'DIRUT', 'DIRUTAMA', 'DIREKTUR UTAMA',
+          // ── Komisaris ─────────────────────────────────────────────────────
+          'KOMUT', 'KOMISARIS UTAMA', 'KOMISARIS',
+          // ── Wakil / Deputi / Asisten (Level Atas) ─────────────────────────
+          'WAKADIV', 'WAKADEP', 'WADIR', 'WADIRUT', 'WAGM', 'WASM',
+          'DEPUTI', 'DEPUTY'
+        ];
+
+        isSenior = seniorKeywords.some(keyword => {
+          const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'i');
+          return regex.test(jobTitle);
+        });
+
         if (isSenior) {
-          logger.info(`[Lookup] User ID ${u.id} memiliki org_role 'Reporting To' → isSenior = true (auto-approve)`);
+          logger.info(`[Lookup] User ID ${u.id} memiliki jabatan '${rawJobTitle}' (Senior/Manajemen) → isSenior = true (auto-approve)`);
         }
       } catch (detailErr) {
         logger.warn(`[Lookup] Gagal ambil detail user ${u.id}: ${detailErr.message} — reporting_to diabaikan.`);
@@ -684,7 +855,8 @@ async function getUserById(userId) {
     return {
       id:         u.id || String(userId),
       name:       u.name || '-',
-      jobtitle:   u.jobtitle || '',
+      jobtitle:   u.jobtitle || '',      // key asli dari ManageEngine
+      jobTitle:   u.jobtitle || '',      // camelCase alias — untuk konsistensi dengan user object
       phone:      u.phone  || null,
       mobile:     u.mobile || null,
       reportingTo,
@@ -1009,6 +1181,82 @@ function _handleAxiosError(prefix, err) {
   }
 }
 
+/**
+ * Upload Attachment ke ManageEngine ServiceDesk Plus.
+ *
+ * Alur sesuai Postman Collection On-Premise (Add and associate attachment):
+ *   PUT /api/v3/requests/:request_id/upload
+ *   — Upload file DAN asosiasikan langsung ke tiket dalam satu request.
+ *
+ * Content-Type: multipart/form-data (set otomatis oleh form-data library)
+ * Field       : input_file (type: file)
+ * Headers     : TECHNICIAN_KEY, PORTALID, Accept
+ *               (TANPA Content-Type manual — biarkan form-data set boundary)
+ *
+ * Response    : { attachment: { id, name, content_type, ... }, response_status: { status_code: 2000 } }
+ *
+ * @param {string} requestId - ID tiket ManageEngine
+ * @param {object} media     - { data: base64, mimetype, filename }
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+async function uploadAttachment(requestId, media) {
+  try {
+    const FormData = require('form-data');
+    const form = new FormData();
+
+    // Convert base64 media ke Buffer
+    const buffer = Buffer.from(media.data, 'base64');
+    const ext = (media.mimetype || 'image/jpeg').split('/')[1] || 'jpeg';
+    const filename = media.filename || `foto_tiket_${Date.now()}.${ext}`;
+
+    // Field 'input_file' sesuai Postman Collection ManageEngine
+    form.append('input_file', buffer, {
+      filename,
+      contentType: media.mimetype || 'image/jpeg'
+    });
+
+    // Satu langkah: Upload DAN asosiasikan ke tiket via PUT /api/v3/requests/:requestId/upload
+    // Endpoint ini lebih sederhana dan reliable dibanding 2-langkah (POST upload + PUT link).
+    // Sesuai Postman Collection: "Add and associate attachment"
+    const uploadEndpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/upload`;
+    logger.info(`[Ticket] Mengunggah dan menautkan foto ke tiket ${requestId} — PUT ${uploadEndpoint}`);
+
+    const uploadResponse = await axios.put(uploadEndpoint, form, {
+      headers: {
+        'TECHNICIAN_KEY': TECHNICIAN_KEY,
+        'PORTALID': PORTAL_ID,
+        'Accept': 'application/vnd.manageengine.sdp.v3+json',
+        ...form.getHeaders()  // set multipart boundary otomatis (TANPA Content-Type manual)
+      },
+      timeout: 30000,
+      maxContentLength: 10 * 1024 * 1024  // maks 10MB untuk response buffer
+    });
+
+    const attachment    = uploadResponse.data?.attachment || null;
+    const attachmentId  = attachment?.id || null;
+    const statusCode    = uploadResponse.data?.response_status?.status_code;
+
+    if (!attachmentId || statusCode !== 2000) {
+      logger.warn(
+        `[Ticket] Upload foto gagal atau attachment ID tidak tersedia — ` +
+        `tiket: ${requestId}, status: ${statusCode}, ` +
+        `respons: ${JSON.stringify(uploadResponse.data).substring(0, 200)}`
+      );
+      return { success: false, error: 'Foto gagal diunggah ke ManageEngine' };
+    }
+
+    logger.info(
+      `[Ticket] ✓ Foto berhasil diunggah dan ditautkan ke tiket ${requestId} — ` +
+      `attachment ID: ${attachmentId}, nama: ${attachment.name || filename}`
+    );
+    return { success: true };
+
+  } catch (error) {
+    logger.error(`[Ticket] Error upload foto ke tiket ${requestId}: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   submitToEndpoint,
   lookupUserByEmail,
@@ -1020,5 +1268,6 @@ module.exports = {
   approveTicket,
   rejectTicket,
   createApprovalLevel,
-  addApproverToLevel
+  addApproverToLevel,
+  uploadAttachment
 };
