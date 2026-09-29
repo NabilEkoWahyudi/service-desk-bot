@@ -1,6 +1,6 @@
-# IT Help Desk Bot — PLN Batam
+# IT ServiceDesk Bot — PLN Batam
 
-Bot WhatsApp otomatis (Help Desk) khusus untuk melayani pengajuan dan keluhan IT di lingkungan PLN Batam. Sistem ini terintegrasi secara *real-time* dengan **ManageEngine ServiceDesk Plus On-Premise**.
+Bot WhatsApp otomatis (ServiceDesk) khusus untuk melayani pengajuan dan keluhan IT di lingkungan PLN Batam. Sistem ini terintegrasi secara *real-time* dengan **ManageEngine ServiceDesk Plus On-Premise**.
 
 Bot memandu pegawai mengisi formulir request IT secara interaktif, memvalidasi status pegawai langsung ke database ManageEngine, membuat deskripsi tiket resmi dalam format HTML, dan mengirimkan tiket secara otomatis ke sistem IT PLN.
 
