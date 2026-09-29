@@ -803,4 +803,27 @@ async function sendMessageToNumber(waNumber, message) {
   }
 }
 
-module.exports = { initWhatsApp, getWhatsAppStatus, closeWhatsApp, restartWhatsApp, sendMessageToNumber };
+async function sendMediaToNumber(waNumber, base64Data, mimeType, filename, caption) {
+  if (!waClient) {
+    return { success: false, error: 'WhatsApp client belum siap atau belum terhubung.' };
+  }
+
+  try {
+    const state = await waClient.getState();
+    if (state !== 'CONNECTED') {
+      return { success: false, error: `WhatsApp tidak terhubung. State: ${state}` };
+    }
+
+    const chatId = waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`;
+    const media = new MessageMedia(mimeType, base64Data, filename);
+    await waClient.sendMessage(chatId, media, { caption });
+    
+    logger.info(`[WhatsApp] Balasan media terkirim ke ${waNumber}`);
+    return { success: true };
+  } catch (err) {
+    logger.error(`[WhatsApp] Gagal kirim media ke ${waNumber}: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+module.exports = { initWhatsApp, getWhatsAppStatus, closeWhatsApp, restartWhatsApp, sendMessageToNumber, sendMediaToNumber };

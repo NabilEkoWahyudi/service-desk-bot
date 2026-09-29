@@ -86,6 +86,7 @@ function loadTrackedTickets() {
         supervisorMeId: info.supervisorMeId || null,
         appName:       info.appName       || null,   // nama aplikasi (persist lintas restart)
         seenIds:       new Set(Array.isArray(info.seenIds) ? info.seenIds : []),
+        seenAttachmentIds: new Set(Array.isArray(info.seenAttachmentIds) ? info.seenAttachmentIds : []),
         registeredAt:  info.registeredAt,
         lastCheckedAt: 0
       });
@@ -115,6 +116,7 @@ function saveTrackedTickets() {
         supervisorMeId: info.supervisorMeId || null,
         appName:        info.appName        || null,   // nama aplikasi (untuk pesan ke atasan)
         seenIds:        [...info.seenIds],
+        seenAttachmentIds: [...(info.seenAttachmentIds || [])],
         registeredAt:   info.registeredAt,
         lastCheckedAt:  info.lastCheckedAt
       };
@@ -698,6 +700,56 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
         info.seenIds.add(notifId);
         anyNew = true;
         logger.info(`[Notif] ✓ Notifikasi #${notifId} tiket ${requestId} → WA ${targetWa} (type: ${notifType || 'unknown'})`);
+
+        // ── TASK 12: Cek attachment tiket dan kirim jika ada foto baru ────────
+        // Jika ini balasan admin, cek apakah ada file lampiran di tiket tersebut.
+        if (notifType !== 'approval' && notifType !== 'system_notification') {
+          try {
+            const ticketSvc = require('./ticket.service');
+            const waSvc = require('./whatsapp.service');
+            
+            // Inisialisasi Set untuk id attachment yang sudah dilihat (fallback)
+            if (!info.seenAttachmentIds) info.seenAttachmentIds = new Set();
+            
+            // Ambil daftar attachment tiket
+            const attachments = await ticketSvc.getTicketAttachments(requestId);
+            
+            // Filter hanya gambar dan batasi max 5 gambar baru (menghindari spam)
+            const newImageAttachments = attachments.filter(att => 
+              att && 
+              att.id && 
+              att.content_type && 
+              att.content_type.includes('image') &&
+              !info.seenAttachmentIds.has(String(att.id))
+            ).slice(0, 5);
+
+            for (const att of newImageAttachments) {
+              const attIdStr = String(att.id);
+              logger.info(`[Notif] Mendownload attachment foto baru ${attIdStr} dari tiket ${requestId}...`);
+              
+              const fileData = await ticketSvc.downloadTicketAttachment(requestId, att.id, att.content_type);
+              if (fileData && fileData.data) {
+                const sendResult = await waSvc.sendMediaToNumber(
+                  targetWa, 
+                  fileData.data, 
+                  fileData.content_type, 
+                  att.name || `lampiran_${att.id}.jpg`,
+                  `📎 Lampiran dari Admin — Tiket #${requestId}`
+                );
+                
+                if (sendResult.success) {
+                  logger.info(`[Notif] ✓ Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
+                  info.seenAttachmentIds.add(attIdStr);
+                  anyNew = true;
+                } else {
+                  logger.warn(`[Notif] ✗ Gagal mengirim lampiran foto ${attIdStr} ke WA ${targetWa}: ${sendResult.error}`);
+                }
+              }
+            }
+          } catch (errAtt) {
+            logger.warn(`[Notif] Error saat memproses attachment tiket ${requestId}: ${errAtt.message}`);
+          }
+        }
       } else {
         // Tidak masuk seenIds → akan dicoba ulang di polling berikutnya
         logger.warn(`[Notif] ✗ Gagal kirim notifikasi #${notifId} tiket ${requestId} ke ${targetWa}: ${result.error} — akan dicoba ulang.`);

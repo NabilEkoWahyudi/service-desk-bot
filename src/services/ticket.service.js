@@ -1195,65 +1195,154 @@ function _handleAxiosError(prefix, err) {
  *
  * Response    : { attachment: { id, name, content_type, ... }, response_status: { status_code: 2000 } }
  *
+/**
+ * Mengunggah satu atau beberapa foto/dokumen ke tiket (add and associate).
+ *
  * @param {string} requestId - ID tiket ManageEngine
- * @param {object} media     - { data: base64, mimetype, filename }
- * @returns {Promise<{ success: boolean, error?: string }>}
+ * @param {object|object[]} mediaList - Objek { data, mimetype, filename } atau array of objek tersebut
+ * @returns {Promise<{ success: boolean, uploaded: number, failed: number, errors: string[] }>}
  */
-async function uploadAttachment(requestId, media) {
+async function uploadAttachments(requestId, mediaList) {
+  if (!Array.isArray(mediaList)) {
+    mediaList = [mediaList];
+  }
+
+  const result = { success: false, uploaded: 0, failed: 0, errors: [] };
+  const FormData = require('form-data');
+
+  for (let i = 0; i < mediaList.length; i++) {
+    const media = mediaList[i];
+    if (!media || !media.data) continue;
+
+    try {
+      const form = new FormData();
+
+      // Convert base64 media ke Buffer
+      const buffer = Buffer.from(media.data, 'base64');
+      const ext = (media.mimetype || 'image/jpeg').split('/')[1] || 'jpeg';
+      const filename = media.filename || `foto_tiket_${Date.now()}_${i}.${ext}`;
+
+      // Field 'input_file' sesuai Postman Collection ManageEngine
+      form.append('input_file', buffer, {
+        filename,
+        contentType: media.mimetype || 'image/jpeg'
+      });
+
+      // Satu langkah: Upload DAN asosiasikan ke tiket via PUT /api/v3/requests/:requestId/upload
+      const uploadEndpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/upload`;
+      logger.info(`[Ticket] Mengunggah foto ke-${i+1} ke tiket ${requestId} — PUT ${uploadEndpoint}`);
+
+      const uploadResponse = await axios.put(uploadEndpoint, form, {
+        headers: {
+          'TECHNICIAN_KEY': TECHNICIAN_KEY,
+          'PORTALID': PORTAL_ID,
+          'Accept': 'application/vnd.manageengine.sdp.v3+json',
+          ...form.getHeaders()  // set multipart boundary otomatis (TANPA Content-Type manual)
+        },
+        timeout: 30000,
+        maxContentLength: 10 * 1024 * 1024  // maks 10MB untuk response buffer
+      });
+
+      const attachment    = uploadResponse.data?.attachment || null;
+      const attachmentId  = attachment?.id || null;
+      const statusCode    = uploadResponse.data?.response_status?.status_code;
+
+      if (!attachmentId || statusCode !== 2000) {
+        logger.warn(
+          `[Ticket] Upload foto ke-${i+1} gagal atau attachment ID tidak tersedia — ` +
+          `tiket: ${requestId}, status: ${statusCode}, ` +
+          `respons: ${JSON.stringify(uploadResponse.data).substring(0, 200)}`
+        );
+        result.failed++;
+        result.errors.push(`Gagal upload foto ke-${i+1}`);
+      } else {
+        logger.info(
+          `[Ticket] ✓ Foto ke-${i+1} berhasil diunggah dan ditautkan ke tiket ${requestId} — ` +
+          `attachment ID: ${attachmentId}, nama: ${attachment.name || filename}`
+        );
+        result.uploaded++;
+      }
+
+    } catch (error) {
+      logger.error(`[Ticket] Error upload foto ke-${i+1} ke tiket ${requestId}: ${error.message}`);
+      result.failed++;
+      result.errors.push(error.message);
+    }
+  }
+
+  result.success = result.uploaded > 0;
+  return result;
+}
+
+
+/**
+ * Mengambil daftar attachment pada tiket.
+ * Sesuai Postman: GET /api/v3/requests/:request_id/attachments
+ * Response: { attachments: [{ id, name, content_type, content_url, size }] }
+ * @param {string} requestId - ID tiket
+ */
+async function getTicketAttachments(requestId) {
   try {
-    const FormData = require('form-data');
-    const form = new FormData();
-
-    // Convert base64 media ke Buffer
-    const buffer = Buffer.from(media.data, 'base64');
-    const ext = (media.mimetype || 'image/jpeg').split('/')[1] || 'jpeg';
-    const filename = media.filename || `foto_tiket_${Date.now()}.${ext}`;
-
-    // Field 'input_file' sesuai Postman Collection ManageEngine
-    form.append('input_file', buffer, {
-      filename,
-      contentType: media.mimetype || 'image/jpeg'
-    });
-
-    // Satu langkah: Upload DAN asosiasikan ke tiket via PUT /api/v3/requests/:requestId/upload
-    // Endpoint ini lebih sederhana dan reliable dibanding 2-langkah (POST upload + PUT link).
-    // Sesuai Postman Collection: "Add and associate attachment"
-    const uploadEndpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/upload`;
-    logger.info(`[Ticket] Mengunggah dan menautkan foto ke tiket ${requestId} — PUT ${uploadEndpoint}`);
-
-    const uploadResponse = await axios.put(uploadEndpoint, form, {
+    const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/attachments`;
+    logger.info(`[Ticket] Mengambil list attachment tiket ${requestId} — GET ${endpoint}`);
+    const response = await axios.get(endpoint, {
       headers: {
         'TECHNICIAN_KEY': TECHNICIAN_KEY,
         'PORTALID': PORTAL_ID,
-        'Accept': 'application/vnd.manageengine.sdp.v3+json',
-        ...form.getHeaders()  // set multipart boundary otomatis (TANPA Content-Type manual)
+        'Accept': 'application/vnd.manageengine.sdp.v3+json'
       },
+      timeout: 15000
+    });
+    const list = response.data?.attachments || [];
+    logger.info(`[Ticket] Attachment tiket ${requestId}: ${list.length} file ditemukan`);
+    return list;
+  } catch (error) {
+    logger.warn(`[Ticket] Gagal mengambil list attachment untuk tiket ${requestId}: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Mengunduh attachment tiket sebagai base64.
+ * Sesuai Postman: GET /api/v3/requests/:request_id/attachments/:attachment_id/download
+ * @param {string} requestId     - ID tiket
+ * @param {string} attachmentId  - ID attachment
+ * @param {string} contentType   - mime type (opsional, fallback dari list)
+ */
+async function downloadTicketAttachment(requestId, attachmentId, contentType = null) {
+  try {
+    const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/attachments/${attachmentId}/download`;
+    logger.info(`[Ticket] Mendownload attachment ${attachmentId} dari tiket ${requestId} — GET ${endpoint}`);
+    const response = await axios.get(endpoint, {
+      headers: {
+        'TECHNICIAN_KEY': TECHNICIAN_KEY,
+        'PORTALID': PORTAL_ID,
+        'Accept': '*/*'
+      },
+      responseType: 'arraybuffer',
       timeout: 30000,
-      maxContentLength: 10 * 1024 * 1024  // maks 10MB untuk response buffer
+      maxRedirects: 5,           // ikuti redirect jika ada
+      maxContentLength: 20 * 1024 * 1024  // batas 20MB
     });
 
-    const attachment    = uploadResponse.data?.attachment || null;
-    const attachmentId  = attachment?.id || null;
-    const statusCode    = uploadResponse.data?.response_status?.status_code;
-
-    if (!attachmentId || statusCode !== 2000) {
-      logger.warn(
-        `[Ticket] Upload foto gagal atau attachment ID tidak tersedia — ` +
-        `tiket: ${requestId}, status: ${statusCode}, ` +
-        `respons: ${JSON.stringify(uploadResponse.data).substring(0, 200)}`
-      );
-      return { success: false, error: 'Foto gagal diunggah ke ManageEngine' };
+    if (!response.data || response.data.byteLength === 0) {
+      logger.warn(`[Ticket] Attachment ${attachmentId} — response kosong`);
+      return null;
     }
 
-    logger.info(
-      `[Ticket] ✓ Foto berhasil diunggah dan ditautkan ke tiket ${requestId} — ` +
-      `attachment ID: ${attachmentId}, nama: ${attachment.name || filename}`
-    );
-    return { success: true };
+    // Prioritaskan content-type dari header respons, fallback ke parameter, lalu default
+    const mime = response.headers['content-type']
+      || contentType
+      || 'application/octet-stream';
 
+    logger.info(`[Ticket] ✓ Attachment ${attachmentId} didownload — ${response.data.byteLength} bytes, mime: ${mime}`);
+    return {
+      data: Buffer.from(response.data).toString('base64'),
+      content_type: mime.split(';')[0].trim()  // hapus bagian "; charset=..." jika ada
+    };
   } catch (error) {
-    logger.error(`[Ticket] Error upload foto ke tiket ${requestId}: ${error.message}`);
-    return { success: false, error: error.message };
+    logger.warn(`[Ticket] Gagal mendownload attachment ${attachmentId} tiket ${requestId}: ${error.message}`);
+    return null;
   }
 }
 
@@ -1269,5 +1358,7 @@ module.exports = {
   rejectTicket,
   createApprovalLevel,
   addApproverToLevel,
-  uploadAttachment
+  uploadAttachments,
+  getTicketAttachments,
+  downloadTicketAttachment
 };

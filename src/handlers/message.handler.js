@@ -20,7 +20,7 @@
  *   Group, Level (Request), Status (Open), Service Category (Manajemen User)
  */
 
-const { submitToEndpoint, lookupUserByEmail, getApprovalLevels, getApprovalsByLevel, approveTicket, rejectTicket, uploadAttachment } = require('../services/ticket.service');
+const { submitToEndpoint, lookupUserByEmail, getApprovalLevels, getApprovalsByLevel, approveTicket, rejectTicket, uploadAttachments } = require('../services/ticket.service');
 const { CATEGORY_CONFIG } = require('../config/endpoints');
 const { buildAllFieldsPrompt, parseNumberedList, validateField } = require('../utils/validators');
 const { loadSessions, saveSessions } = require('../services/session.service');
@@ -490,7 +490,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply, rateRe
       `*Aplikasi* : ${appName}\n` +
       (requestId ? `*No. Tiket* : ${requestId}\n` : '') +
       `*Status*   : Disetujui Langsung ✅\n\n` +
-      (attachmentUploaded === false ? `⚠️ Tiket terkirim, tetapi foto gagal diunggah. Silakan hubungi Tim IT.\n\n` : '') +
+      (attachmentUploaded && attachmentUploaded.failed > 0 ? `⚠️ Catatan: ${attachmentUploaded.failed} dari ${attachmentUploaded.uploaded + attachmentUploaded.failed} foto gagal diunggah.\n\n` : '') +
       ` Sebagai *${jobTitle}*, permintaan Anda tidak memerlukan persetujuan atasan.\n` +
       `Tim IT akan segera menindaklanjuti request Anda.\n\n` +
       `Ketik *menu* untuk mengajukan request baru.`
@@ -567,7 +567,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply, rateRe
     `*Aplikasi* : ${appName}\n` +
     (requestId ? `*No. Tiket* : ${requestId}\n` : '') +
     `*Status* : Terkirim ke ServiceDesk\n\n` +
-    (attachmentUploaded === false ? `⚠️ Tiket terkirim, tetapi foto gagal diunggah. Silakan hubungi Tim IT.\n\n` : '') +
+    (attachmentUploaded && attachmentUploaded.failed > 0 ? `⚠️ Catatan: ${attachmentUploaded.failed} dari ${attachmentUploaded.uploaded + attachmentUploaded.failed} foto gagal diunggah.\n\n` : '') +
     supervisorNote +
     `Anda akan mendapat notifikasi WhatsApp begitu atasan memberikan keputusan.\n\n` +
     `Ketik *menu* untuk mengajukan request baru.`
@@ -577,10 +577,85 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply, rateRe
 }
 
 async function uploadSessionMedia(requestId, session) {
-  if (!requestId || !session.media) return null;
-  const result = await uploadAttachment(requestId, session.media);
-  session.media = null;
-  return result.success;
+  if (!requestId || !session.mediaList || session.mediaList.length === 0) return null;
+  const result = await uploadAttachments(requestId, session.mediaList);
+  session.mediaList = null;
+  if (result.success) {
+    logger.info(`[Handler] ✓ uploadAttachments (AUTORISASI) berhasil untuk tiket ${requestId} (${result.uploaded} foto)`);
+  } else {
+    logger.error(`[Handler] uploadAttachments (AUTORISASI) gagal untuk tiket ${requestId} | Error asli: ${result.errors.join(', ')}`);
+  }
+  return result; // return { success, uploaded, failed, errors }
+}
+
+
+/**
+ * Menangani pesan yang berisi HANYA FOTO tanpa teks (fast path, tanpa lock).
+ *
+ * WhatsApp mengirim foto album sebagai banyak pesan image terpisah yang hampir
+ * bersamaan. Karena acquireLock() menolak permintaan paralel untuk nomor yang
+ * sama, foto ke-2 dan seterusnya akan hilang jika diproses lewat jalur utama.
+ *
+ * Fungsi ini tidak mengubah state machine — ia hanya mengumpulkan foto ke
+ * session.mediaList sehingga aman dijalankan tanpa lock (JS event loop
+ * single-threaded menjamin push() ke array tidak race-condition).
+ */
+async function handleImageOnly(waNumber, sendReply, msg) {
+  const session = getSession(waNumber);
+
+  // Hanya terima foto jika sedang dalam state yang mendukungnya
+  if (![STATE.FILLING_FORM, STATE.CONFIRMING].includes(session.state)) {
+    await sendReply('Silakan pilih kategori dan isi formulir terlebih dahulu sebelum mengirim foto.');
+    return;
+  }
+
+  let media = null;
+
+  // Metode 1: Library standar
+  try {
+    media = await msg.downloadMedia();
+    if (media) logger.info(`[Handler] ✓ downloadMedia() library berhasil dari ${waNumber}`);
+  } catch (err) {
+    logger.warn(`[Handler] downloadMedia() library gagal dari ${waNumber} | Error asli: ${err.message || String(err)}`);
+  }
+
+  // Metode 2: Direct HTTPS + decrypt (fallback)
+  if (!media && msg._data) {
+    logger.info(`[Handler] Mencoba downloadMediaDirect() untuk ${waNumber}...`);
+    try {
+      media = await downloadMediaDirect(msg._data);
+      if (media) logger.info(`[Handler] ✓ downloadMediaDirect() berhasil dari ${waNumber}`);
+    } catch (err) {
+      logger.error(`[Handler] downloadMediaDirect() gagal untuk ${waNumber} | Error: ${err.message || String(err)}`);
+    }
+  }
+
+  if (!media) {
+    logger.error(`[Handler] SEMUA metode download gagal untuk ${waNumber} (fast path)`);
+    await sendReply('⚠️ Foto gagal diunduh dari sistem WhatsApp. Silakan coba kirim ulang foto Anda.');
+    return;
+  }
+
+  const mediaBytes = Buffer.byteLength(media.data || '', 'base64');
+  if (!['image/jpeg', 'image/png'].includes(media.mimetype) || mediaBytes > 5 * 1024 * 1024) {
+    logger.warn(`[Handler] Media tidak valid dari ${waNumber} (mimetype: ${media.mimetype}, size: ${mediaBytes})`);
+    await sendReply('Foto tidak dapat digunakan. Kirim file JPG/PNG dengan ukuran maksimal 5 MB.');
+    return;
+  }
+
+  // Push ke mediaList — aman tanpa lock karena JS event loop single-threaded
+  session.mediaList = session.mediaList || [];
+  if (session.mediaList.length >= 5) {
+    await sendReply('⚠️ Maksimal 5 foto per tiket. Foto ini tidak disimpan.\n\n_Ketik *OKE* untuk mengirim tiket, atau ketik *BATAL* untuk mengulang._');
+    return;
+  }
+
+  session.mediaList.push({ data: media.data, mimetype: media.mimetype, filename: media.filename });
+  sessions.set(waNumber, session);
+  saveSessions(sessions);
+  logger.info(`[Handler] Media foto ke-${session.mediaList.length} tersimpan ke session ${waNumber} — ${Math.round(mediaBytes / 1024)}KB`);
+
+  await sendReply(`Foto ke-${session.mediaList.length} diterima ✅ (total: ${session.mediaList.length} foto).\n\n_Ketik *OKE* untuk mengirim tiket, atau kirim foto lagi untuk menambah (maks. 5)._`);
 }
 
 
@@ -598,13 +673,24 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
     return;
   }
 
+  const text = (messageText || '').trim();
+
+  // ── FAST PATH: Pesan foto tanpa teks — kumpulkan ke mediaList tanpa lock ──
+  // WhatsApp mengirim foto album sebagai beberapa pesan terpisah yang hampir
+  // bersamaan. acquireLock() akan menolak foto ke-2 dst karena foto ke-1 masih
+  // diproses. Solusi: pesan image murni (tanpa teks) tidak memerlukan lock
+  // karena hanya push ke session.mediaList, tidak mengubah state machine.
+  if (msg?.hasMedia && msg.type === 'image' && !text) {
+    await handleImageOnly(waNumber, sendReply, msg);
+    return;
+  }
+
   // Anti-spam lock dengan auto-expiry (Item 7)
   if (!acquireLock(waNumber)) {
     return;
   }
 
   try {
-    const text = (messageText || '').trim();
     if (!text && !(msg?.hasMedia && msg.type === 'image')) return;
 
     // Batasi panjang input dan sanitasi karakter berbahaya (Unicode control & formatting chars)
@@ -895,18 +981,27 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
         if (media) {
           const mediaBytes = Buffer.byteLength(media.data || '', 'base64');
           if (['image/jpeg', 'image/png'].includes(media.mimetype) && mediaBytes <= 5 * 1024 * 1024) {
-            session.media = {
-              data: media.data,
-              mimetype: media.mimetype,
-              filename: media.filename
-            };
-            sessions.set(waNumber, session);
-            saveSessions(sessions);
-            logger.info(`[Handler] Media foto tersimpan ke session ${waNumber} — ${Math.round(mediaBytes / 1024)}KB`);
+            session.mediaList = session.mediaList || [];
+            
+            if (session.mediaList.length >= 5) {
+              if (!safeText) {
+                await sendReply('⚠️ Maksimal 5 foto per tiket. Foto ini tidak disimpan.\n\n_Ketik *OKE* untuk mengirim tiket, atau ketik *BATAL* untuk mengulang._');
+                return;
+              }
+            } else {
+              session.mediaList.push({
+                data: media.data,
+                mimetype: media.mimetype,
+                filename: media.filename
+              });
+              sessions.set(waNumber, session);
+              saveSessions(sessions);
+              logger.info(`[Handler] Media foto ke-${session.mediaList.length} tersimpan ke session ${waNumber} — ${Math.round(mediaBytes / 1024)}KB`);
 
-            if (!safeText) {
-              await sendReply('Foto diterima ✅ dan akan dilampirkan pada tiket setelah Anda mengonfirmasi pengajuan.\n\n_Ketik *OKE* untuk mengirim tiket beserta fotonya._');
-              return;
+              if (!safeText) {
+                await sendReply(`Foto ke-${session.mediaList.length} diterima ✅ (total: ${session.mediaList.length} foto).\n\n_Ketik *OKE* untuk mengirim tiket, atau kirim foto lagi untuk menambah._`);
+                return;
+              }
             }
           } else {
             logger.warn(`[Handler] Media tidak valid (mimetype: ${media.mimetype}, size: ${Buffer.byteLength(media.data || '', 'base64')}) dari ${waNumber}`);
@@ -1258,23 +1353,21 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
 
             if (result.success) {
               // ── Upload Attachment jika ada ─────────────────────────────────
-              let attachmentSuccess = true;
-              if (result.requestId && session.media) {
-                const uploadResult = await uploadAttachment(result.requestId, session.media);
+              let uploadResult = null;
+              if (result.requestId && session.mediaList && session.mediaList.length > 0) {
+                uploadResult = await uploadAttachments(result.requestId, session.mediaList);
                 if (!uploadResult.success) {
-                  attachmentSuccess = false;
-                  logger.error(`[Handler] uploadAttachment gagal untuk tiket ${result.requestId} | Error asli: ${uploadResult.error || 'Unknown error'}`);
+                  logger.error(`[Handler] uploadAttachments gagal untuk tiket ${result.requestId} | Error asli: ${uploadResult.errors.join(', ')}`);
                 } else {
-                  logger.info(`[Handler] ✓ uploadAttachment berhasil untuk tiket ${result.requestId}`);
+                  logger.info(`[Handler] ✓ uploadAttachments berhasil untuk tiket ${result.requestId} (${uploadResult.uploaded} foto)`);
                 }
                 // Bersihkan media setelah diupload
-                session.media = null;
+                session.mediaList = null;
               }
 
-              // Tampilkan nomor tiket ManageEngine agar user bisa tracking
+              // Catat penggunaan rate limit user
               const _emailForLimit = (session.verifiedUser?.email || session.data?.requester || waNumber);
               incrementRateLimit(waNumber, _emailForLimit);
-              const ticketRef = result.requestId ? ` No. Tiket : ${result.requestId}\n` : '';
 
               // ── Daftarkan tiket ke notification service ─────────────────────
               // Agar setiap notifikasi/balasan dari admin di ManageEngine
@@ -1292,8 +1385,12 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
               
               let replyMsg = `✅ *Request berhasil dikirim!*\n\n` + successLines;
               
-              if (!attachmentSuccess) {
-                replyMsg += `\n\n⚠️ *Catatan:* Tiket terkirim, tetapi foto gagal diunggah ke sistem.`;
+              if (uploadResult && uploadResult.failed > 0) {
+                if (uploadResult.uploaded === 0) {
+                  replyMsg += `\n\n⚠️ *Catatan:* Tiket terkirim, tetapi semua foto gagal diunggah ke sistem.`;
+                } else {
+                  replyMsg += `\n\n⚠️ *Catatan:* ${uploadResult.failed} dari ${uploadResult.uploaded + uploadResult.failed} foto gagal diunggah ke sistem.`;
+                }
               }
               
               replyMsg += `\n\nTerima kasih telah menggunakan IT Service Desk Bot. Ketik *menu* kapan saja untuk mengajukan request baru.`;
