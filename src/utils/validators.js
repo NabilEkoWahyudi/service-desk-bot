@@ -33,7 +33,7 @@ function buildAllFieldsPrompt(config) {
   return (
     `Silakan isi data berikut dalam *satu pesan* dengan format:\n\n` +
     fieldLines.join('\n') +
-    `\n\nDapat mengupload media foto (png/jpg)`
+    `\n\nDapat mengupload media foto (png/jpg Maks. 5).`
   );
 }
 

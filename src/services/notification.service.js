@@ -713,30 +713,53 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
             
             // Ambil daftar attachment tiket
             const attachments = await ticketSvc.getTicketAttachments(requestId);
-            
-            // Filter hanya gambar dan batasi max 5 gambar baru (menghindari spam)
-            const newImageAttachments = attachments.filter(att => 
-              att && 
-              att.id && 
-              att.content_type && 
-              att.content_type.includes('image') &&
-              !info.seenAttachmentIds.has(String(att.id))
+
+            // Helper: deteksi mime type gambar dari ekstensi nama file.
+            // ManageEngine sering mengembalikan content_type generik 'application/x-download'
+            // sehingga kita tidak bisa mengandalkan content_type untuk filter gambar.
+            function getImageMime(att) {
+              const name = (att.name || '').toLowerCase();
+              if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+              if (name.endsWith('.png'))  return 'image/png';
+              if (name.endsWith('.gif'))  return 'image/gif';
+              if (name.endsWith('.webp')) return 'image/webp';
+              // Fallback: cek content_type jika sudah benar dari server
+              const ct = (att.content_type || '').toLowerCase();
+              if (ct.startsWith('image/')) return ct;
+              return null; // bukan gambar, skip
+            }
+
+            // Filter hanya gambar (dari ekstensi), batasi max 5 per notifikasi
+            const newImageAttachments = attachments.filter(att =>
+              att &&
+              att.id &&
+              !info.seenAttachmentIds.has(String(att.id)) &&
+              getImageMime(att) !== null
             ).slice(0, 5);
+
+            logger.info(`[Notif] Tiket ${requestId}: ${attachments.length} attachment total, ${newImageAttachments.length} gambar baru`);
 
             for (const att of newImageAttachments) {
               const attIdStr = String(att.id);
-              logger.info(`[Notif] Mendownload attachment foto baru ${attIdStr} dari tiket ${requestId}...`);
-              
-              const fileData = await ticketSvc.downloadTicketAttachment(requestId, att.id, att.content_type);
+              const imageMime = getImageMime(att);
+              logger.info(`[Notif] Mendownload attachment foto baru ${attIdStr} (${att.name}) dari tiket ${requestId}...`);
+
+              const fileData = await ticketSvc.downloadTicketAttachment(requestId, att.id, imageMime);
               if (fileData && fileData.data) {
+                // Selalu gunakan mime dari ekstensi file agar WhatsApp client
+                // bisa mengenali tipe media (bukan application/x-download)
+                const finalMime = (fileData.content_type || '').startsWith('image/')
+                  ? fileData.content_type
+                  : imageMime;
+
                 const sendResult = await waSvc.sendMediaToNumber(
-                  targetWa, 
-                  fileData.data, 
-                  fileData.content_type, 
+                  targetWa,
+                  fileData.data,
+                  finalMime,
                   att.name || `lampiran_${att.id}.jpg`,
                   `📎 Lampiran dari Admin — Tiket #${requestId}`
                 );
-                
+
                 if (sendResult.success) {
                   logger.info(`[Notif] ✓ Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
                   info.seenAttachmentIds.add(attIdStr);
@@ -744,6 +767,8 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
                 } else {
                   logger.warn(`[Notif] ✗ Gagal mengirim lampiran foto ${attIdStr} ke WA ${targetWa}: ${sendResult.error}`);
                 }
+              } else {
+                logger.warn(`[Notif] Attachment ${attIdStr} gagal didownload atau data kosong`);
               }
             }
           } catch (errAtt) {

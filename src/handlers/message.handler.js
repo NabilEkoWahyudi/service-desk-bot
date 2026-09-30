@@ -655,7 +655,11 @@ async function handleImageOnly(waNumber, sendReply, msg) {
   saveSessions(sessions);
   logger.info(`[Handler] Media foto ke-${session.mediaList.length} tersimpan ke session ${waNumber} — ${Math.round(mediaBytes / 1024)}KB`);
 
-  await sendReply(`Foto ke-${session.mediaList.length} diterima ✅ (total: ${session.mediaList.length} foto).\n\n_Ketik *OKE* untuk mengirim tiket, atau kirim foto lagi untuk menambah (maks. 5)._`);
+  const totalFoto = session.mediaList.length;
+  const pesanFoto = totalFoto === 1
+    ? `Foto Diterima ✅`
+    : `Foto Diterima ✅ (${totalFoto} foto)`;
+  await sendReply(pesanFoto);
 }
 
 
@@ -999,7 +1003,8 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
               logger.info(`[Handler] Media foto ke-${session.mediaList.length} tersimpan ke session ${waNumber} — ${Math.round(mediaBytes / 1024)}KB`);
 
               if (!safeText) {
-                await sendReply(`Foto ke-${session.mediaList.length} diterima ✅ (total: ${session.mediaList.length} foto).\n\n_Ketik *OKE* untuk mengirim tiket, atau kirim foto lagi untuk menambah._`);
+                const tot = session.mediaList.length;
+                await sendReply(tot === 1 ? `Foto Diterima ✅` : `Foto Diterima ✅ (${tot} foto)`);
                 return;
               }
             }

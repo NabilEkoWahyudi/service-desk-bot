@@ -19,6 +19,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const { exec } = require('child_process');   // [PERF] async exec — tidak memblokir event loop
 const { handleMessage } = require('../handlers/message.handler');
 const logger = require('../utils/logger');
@@ -808,6 +809,7 @@ async function sendMediaToNumber(waNumber, base64Data, mimeType, filename, capti
     return { success: false, error: 'WhatsApp client belum siap atau belum terhubung.' };
   }
 
+  let tmpPath = null;
   try {
     const state = await waClient.getState();
     if (state !== 'CONNECTED') {
@@ -815,14 +817,36 @@ async function sendMediaToNumber(waNumber, base64Data, mimeType, filename, capti
     }
 
     const chatId = waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`;
-    const media = new MessageMedia(mimeType, base64Data, filename);
+
+    // Tentukan ekstensi dari mimeType atau filename agar WA bisa mengenali jenis media
+    let ext = '.jpg';
+    if (mimeType === 'image/png') ext = '.png';
+    else if (mimeType === 'image/gif') ext = '.gif';
+    else if (mimeType === 'image/webp') ext = '.webp';
+    else if (filename) {
+      const fnExt = path.extname(filename).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fnExt)) ext = fnExt;
+    }
+
+    // Simpan ke file temporer agar MessageMedia.fromFilePath() bisa mendeteksi mime secara benar
+    // Ini menghindari error "id property undefined" pada WA Web internal saat menggunakan
+    // konstruksi new MessageMedia(mime, base64) dengan mime non-standard seperti application/x-download
+    tmpPath = path.join(os.tmpdir(), `wa_lampiran_${Date.now()}${ext}`);
+    fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
+
+    const media = MessageMedia.fromFilePath(tmpPath);
     await waClient.sendMessage(chatId, media, { caption });
-    
-    logger.info(`[WhatsApp] Balasan media terkirim ke ${waNumber}`);
+
+    logger.info(`[WhatsApp] Lampiran media terkirim ke ${waNumber} (${Math.round(Buffer.from(base64Data, 'base64').length / 1024)}KB)`);
     return { success: true };
   } catch (err) {
     logger.error(`[WhatsApp] Gagal kirim media ke ${waNumber}: ${err.message}`);
     return { success: false, error: err.message };
+  } finally {
+    // Hapus file temporer setelah selesai (berhasil atau gagal)
+    if (tmpPath && fs.existsSync(tmpPath)) {
+      try { fs.unlinkSync(tmpPath); } catch (_) { /* abaikan error cleanup */ }
+    }
   }
 }
 
