@@ -35,6 +35,28 @@ let chromePid = null;    // [FIX-3] Simpan PID Chrome Puppeteer untuk targeted c
 // Map<waNumber, string>
 const lastTextByNumber = new Map();
 
+// Patch otomatis untuk whatsapp-web.js: mengatasi error internal WhatsApp Web
+// "Data passed to getter must include an id property" saat kirim media
+function ensureWwebjsPatched() {
+  try {
+    const utilsPath = path.resolve(__dirname, '../../node_modules/whatsapp-web.js/src/util/Injected/Utils.js');
+    if (fs.existsSync(utilsPath)) {
+      let code = fs.readFileSync(utilsPath, 'utf8');
+      if (!code.includes('delete message.__x_id;')) {
+        code = code.replace(
+          /const message = \{([\s\S]*?)\};/m,
+          (match) => `${match}\n        delete message.__x_id;\n        if (!message.id || typeof message.id !== 'object') {\n            message.id = newMsgKey;\n        }`
+        );
+        fs.writeFileSync(utilsPath, code, 'utf8');
+        logger.info('[WhatsApp] Patch wwebjs otomatis diterapkan: fix error getter id property.');
+      }
+    }
+  } catch (err) {
+    logger.warn(`[WhatsApp] Gagal cek patch wwebjs: ${err.message}`);
+  }
+}
+ensureWwebjsPatched();
+
 const MAX_RECONNECT = 5;
 const INIT_TIMEOUT_MS = 120_000;  // [FIX-1] 120 detik
 // Watchdog: jika Promise.race macet (Chrome zombie), paksa kill setelah durasi ini

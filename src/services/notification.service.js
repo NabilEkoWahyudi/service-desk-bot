@@ -799,6 +799,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
  att &&
  att.id &&
  !info.seenAttachmentIds.has(String(att.id)) &&
+ !(att.name && (att.name.startsWith('wa_image_') || att.name.startsWith('foto_tiket_'))) &&
  getImageMime(att) !== null
  ).slice(0, 5);
 
