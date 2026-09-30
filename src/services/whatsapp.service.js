@@ -818,39 +818,59 @@ async function sendMediaToNumber(waNumber, base64Data, mimeType, filename, capti
 
     const chatId = waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`;
 
-    // Dapatkan chat object dulu - cara yang sama dengan sendMessageToNumber yang sudah bekerja
-    const chat = await waClient.getChatById(chatId);
-    if (!chat) {
-      return { success: false, error: `Chat tidak ditemukan untuk ${waNumber}` };
+    // Pastikan mime adalah image yang valid — jangan gunakan application/x-download
+    // karena WA Web tidak bisa memprosesnya
+    let safeMime = mimeType;
+    if (!mimeType || !mimeType.startsWith('image/')) {
+      // Deteksi dari nama file
+      const fnLower = (filename || '').toLowerCase();
+      if (fnLower.endsWith('.png'))  safeMime = 'image/png';
+      else if (fnLower.endsWith('.gif'))  safeMime = 'image/gif';
+      else if (fnLower.endsWith('.webp')) safeMime = 'image/webp';
+      else safeMime = 'image/jpeg'; // default
     }
 
-    // Tentukan ekstensi dari filename atau mimeType agar WA bisa mengenali jenis media
-    let ext = '.jpg';
-    if (filename) {
-      const fnExt = path.extname(filename).toLowerCase();
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fnExt)) ext = fnExt;
-    } else if (mimeType === 'image/png') ext = '.png';
-    else if (mimeType === 'image/gif') ext = '.gif';
-    else if (mimeType === 'image/webp') ext = '.webp';
+    // Tentukan ekstensi untuk nama file yang aman
+    let safeFilename = filename || `lampiran_${Date.now()}.jpg`;
+    if (!path.extname(safeFilename)) {
+      safeFilename += safeMime === 'image/png' ? '.png' : '.jpg';
+    }
 
-    // Tulis ke file temp agar fromFilePath() mendeteksi mime otomatis dari ekstensi
-    tmpPath = path.join(os.tmpdir(), `wa_lampiran_${Date.now()}${ext}`);
-    fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
+    const sizeBytes = Math.round(Buffer.from(base64Data, 'base64').length);
+    logger.info(`[WhatsApp] Mengirim media ke ${waNumber}: mime=${safeMime}, file=${safeFilename}, size=${Math.round(sizeBytes/1024)}KB`);
 
-    const media = MessageMedia.fromFilePath(tmpPath);
+    // Buat MessageMedia dengan mime yang sudah benar
+    const media = new MessageMedia(safeMime, base64Data, safeFilename);
 
-    // Kirim via chat.sendMessage() - lebih stabil dari waClient.sendMessage()
-    await chat.sendMessage(media, { caption });
+    // Kirim menggunakan waClient.sendMessage() — cara yang sama dengan sendMessageToNumber
+    await waClient.sendMessage(chatId, media, { caption });
 
-    const sizeKb = Math.round(fs.statSync(tmpPath).size / 1024);
-    logger.info(`[WhatsApp] Lampiran media terkirim ke ${waNumber} (${sizeKb}KB)`);
+    logger.info(`[WhatsApp] Lampiran media berhasil terkirim ke ${waNumber}`);
     return { success: true };
   } catch (err) {
-    logger.error(`[WhatsApp] Gagal kirim media ke ${waNumber}: ${err.message}`);
-    return { success: false, error: err.message };
+    logger.error(`[WhatsApp] Gagal kirim media ke ${waNumber}: ${err.message || err}`);
+
+    // Coba fallback: tulis ke file temp lalu kirim via fromFilePath
+    logger.info(`[WhatsApp] Mencoba fallback via file temp untuk ${waNumber}...`);
+    try {
+      const ext = (mimeType === 'image/png') ? '.png' : '.jpg';
+      tmpPath = path.join(os.tmpdir(), `wa_fallback_${Date.now()}${ext}`);
+      fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
+      const mediaFallback = MessageMedia.fromFilePath(tmpPath);
+      await waClient.sendMessage(
+        waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`,
+        mediaFallback,
+        { caption }
+      );
+      logger.info(`[WhatsApp] Fallback berhasil: lampiran media terkirim ke ${waNumber}`);
+      return { success: true };
+    } catch (fallbackErr) {
+      logger.error(`[WhatsApp] Fallback juga gagal untuk ${waNumber}: ${fallbackErr.message || fallbackErr}`);
+      return { success: false, error: fallbackErr.message || String(fallbackErr) };
+    }
   } finally {
     if (tmpPath && fs.existsSync(tmpPath)) {
-      try { fs.unlinkSync(tmpPath); } catch (_) { /* abaikan error cleanup */ }
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
     }
   }
 }
