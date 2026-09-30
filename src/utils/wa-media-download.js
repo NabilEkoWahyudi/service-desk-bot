@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * ─── WA Media Direct Download ─────────────────────────────────────────────────
+ * --- WA Media Direct Download -------------------------------------------------
  * Download dan dekripsi media WhatsApp secara langsung via HTTPS ke CDN WA
  * tanpa bergantung pada Puppeteer atau fungsi internal WA Web.
  *
  * Protokol enkripsi media WhatsApp:
- *   1. mediaKey (base64) → expand via HKDF-SHA256 dengan info "WhatsApp <Type> Keys"
+ *   1. mediaKey (base64) -> expand via HKDF-SHA256 dengan info "WhatsApp <Type> Keys"
  *   2. Hasilkan: iv (16 byte) + cipherKey (32 byte) + macKey (32 byte) + ...
  *   3. Download encrypted file dari https://mmg.whatsapp.net{directPath}
  *   4. Verifikasi HMAC-SHA256 (opsional) lalu decrypt AES-256-CBC
@@ -69,7 +69,7 @@ function deriveMediaKeys(mediaKeyB64, mediaType) {
   const salt = Buffer.alloc(32, 0);
   const prk  = crypto.createHmac('sha256', salt).update(mediaKey).digest();
 
-  // Expand: 112 bytes → iv(16) + cipherKey(32) + macKey(32) + ... 
+  // Expand: 112 bytes -> iv(16) + cipherKey(32) + macKey(32) + ... 
   const expanded = hkdfExpand(prk, info, 112);
 
   return {
@@ -171,7 +171,7 @@ async function downloadMediaDirect(msgData) {
   }
 
   const data = decrypted.toString('base64');
-  logger.info(`[WaMedia] ✓ Dekripsi berhasil — ${Math.round(decrypted.length / 1024)}KB`);
+  logger.info(`[WaMedia]  Dekripsi berhasil - ${Math.round(decrypted.length / 1024)}KB`);
 
   return {
     data,

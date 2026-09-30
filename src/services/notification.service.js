@@ -701,77 +701,133 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
         anyNew = true;
         logger.info(`[Notif]  Notifikasi #${notifId} tiket ${requestId} -> WA ${targetWa} (type: ${notifType || 'unknown'})`);
 
-        // -- TASK 12: Cek attachment tiket dan kirim jika ada foto baru --------
-        // Jika ini balasan admin, cek apakah ada file lampiran di tiket tersebut.
-        if (notifType !== 'approval' && notifType !== 'system_notification') {
-          try {
-            const ticketSvc = require('./ticket.service');
-            const waSvc = require('./whatsapp.service');
-            
-            // Inisialisasi Set untuk id attachment yang sudah dilihat (fallback)
-            if (!info.seenAttachmentIds) info.seenAttachmentIds = new Set();
-            
-            // Ambil daftar attachment tiket
-            const attachments = await ticketSvc.getTicketAttachments(requestId);
+        // -- TASK 12: Cek lampiran & gambar balasan admin (inline & attachment) --------
+ if (notifType !== 'approval' && notifType !== 'system_notification') {
+ try {
+ const ticketSvc = require('./ticket.service');
+ const waSvc = require('./whatsapp.service');
+ 
+ if (!info.seenAttachmentIds) info.seenAttachmentIds = new Set();
 
-            // Helper: deteksi mime type gambar dari ekstensi nama file.
-            // ManageEngine sering mengembalikan content_type generik 'application/x-download'
-            // sehingga kita tidak bisa mengandalkan content_type untuk filter gambar.
-            function getImageMime(att) {
-              const name = (att.name || '').toLowerCase();
-              if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
-              if (name.endsWith('.png'))  return 'image/png';
-              if (name.endsWith('.gif'))  return 'image/gif';
-              if (name.endsWith('.webp')) return 'image/webp';
-              // Fallback: cek content_type jika sudah benar dari server
-              const ct = (att.content_type || '').toLowerCase();
-              if (ct.startsWith('image/')) return ct;
-              return null; // bukan gambar, skip
-            }
+ // 1. Ekstrak gambar inline dari notif.description (HTML)
+ // ManageEngine menyimpan gambar balasan admin sebagai <img src="/api/v3/.../images/:id" alt="..."/>
+ const inlineImages = [];
+ if (notif.description && typeof notif.description === 'string') {
+ const imgTagRegex = /<img\b[^>]*>/gi;
+ let match;
+ while ((match = imgTagRegex.exec(notif.description)) !== null) {
+ const imgTag = match[0];
+ const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
+ if (srcMatch && srcMatch[1]) {
+ const src = srcMatch[1];
+ if (src.includes('/images/') || src.startsWith('/api/v3/')) {
+ const altMatch = imgTag.match(/alt=["']([^"']+)["']/i);
+ const alt = altMatch ? altMatch[1] : '';
+ inlineImages.push({ src, alt });
+ }
+ }
+ }
+ }
 
-            // Filter hanya gambar (dari ekstensi), batasi max 5 per notifikasi
-            const newImageAttachments = attachments.filter(att =>
-              att &&
-              att.id &&
-              !info.seenAttachmentIds.has(String(att.id)) &&
-              getImageMime(att) !== null
-            ).slice(0, 5);
+ if (inlineImages.length > 0) {
+ logger.info(`[Notif] Tiket ${requestId}: ${inlineImages.length} gambar inline ditemukan di balasan admin`);
+ for (let i = 0; i < inlineImages.length && i < 5; i++) {
+ const img = inlineImages[i];
+ const imgKey = `inline_${notifId}_${img.src}`;
+ if (!info.seenAttachmentIds.has(imgKey)) {
+ logger.info(`[Notif] Mendownload gambar inline ke-${i+1} dari balasan admin tiket ${requestId}...`);
+ const fileData = await ticketSvc.downloadInlineImage(img.src);
+ if (fileData && fileData.data) {
+ const filename = img.alt || `foto_admin_${notifId}_${i+1}.${fileData.content_type === 'image/png' ? 'png' : 'jpg'}`;
+ const sendResult = await waSvc.sendMediaToNumber(
+ targetWa,
+ fileData.data,
+ fileData.content_type,
+ filename,
+ `[Lampiran] Balasan dari Admin - Tiket #${requestId}`
+ );
+ if (sendResult.success) {
+ logger.info(`[Notif] Gambar inline ke-${i+1} terkirim ke WA ${targetWa}`);
+ info.seenAttachmentIds.add(imgKey);
+ anyNew = true;
+ } else {
+ logger.warn(`[Notif] Gagal kirim gambar inline ke-${i+1} ke WA ${targetWa}: ${sendResult.error}`);
+ }
+ }
+ }
+ }
+ }
 
-            logger.info(`[Notif] Tiket ${requestId}: ${attachments.length} attachment total, ${newImageAttachments.length} gambar baru`);
+ // 2. Cek attachment pada notifikasi (jika admin melampirkan file pada reply)
+ const notifAttachments = Array.isArray(notif.attachments) ? notif.attachments : [];
+ for (const nAtt of notifAttachments) {
+ const nAttKey = `notif_att_${notifId}_${nAtt.id}`;
+ if (!info.seenAttachmentIds.has(nAttKey)) {
+ logger.info(`[Notif] Mendownload attachment notifikasi #${nAtt.id} (${nAtt.name}) tiket ${requestId}...`);
+ const fileData = await ticketSvc.downloadNotificationAttachment(requestId, notifId, nAtt.id);
+ if (fileData && fileData.data) {
+ const sendResult = await waSvc.sendMediaToNumber(
+ targetWa,
+ fileData.data,
+ fileData.content_type,
+ nAtt.name || `lampiran_${nAtt.id}.jpg`,
+ `[Lampiran] Lampiran dari Admin - Tiket #${requestId}`
+ );
+ if (sendResult.success) {
+ logger.info(`[Notif] Attachment notifikasi #${nAtt.id} terkirim ke WA ${targetWa}`);
+ info.seenAttachmentIds.add(nAttKey);
+ anyNew = true;
+ }
+ }
+ }
+ }
 
-            for (const att of newImageAttachments) {
-              const attIdStr = String(att.id);
-              const imageMime = getImageMime(att);
-              logger.info(`[Notif] Mendownload attachment foto baru ${attIdStr} (${att.name}) dari tiket ${requestId}...`);
+ // 3. Cek attachment di level tiket (request attachments)
+ const attachments = await ticketSvc.getTicketAttachments(requestId);
+ function getImageMime(att) {
+ const name = (att.name || '').toLowerCase();
+ if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+ if (name.endsWith('.png')) return 'image/png';
+ if (name.endsWith('.gif')) return 'image/gif';
+ if (name.endsWith('.webp')) return 'image/webp';
+ const ct = (att.content_type || '').toLowerCase();
+ if (ct.startsWith('image/')) return ct;
+ return null;
+ }
 
-              const fileData = await ticketSvc.downloadTicketAttachment(requestId, att.id, imageMime);
-              if (fileData && fileData.data) {
-                // Selalu gunakan mime dari ekstensi file agar WhatsApp client
-                // bisa mengenali tipe media (bukan application/x-download)
-                const finalMime = (fileData.content_type || '').startsWith('image/')
-                  ? fileData.content_type
-                  : imageMime;
+ const newImageAttachments = attachments.filter(att =>
+ att &&
+ att.id &&
+ !info.seenAttachmentIds.has(String(att.id)) &&
+ getImageMime(att) !== null
+ ).slice(0, 5);
 
-                const sendResult = await waSvc.sendMediaToNumber(
-                  targetWa,
-                  fileData.data,
-                  finalMime,
-                  att.name || `lampiran_${att.id}.jpg`,
-                  `[Lampiran] Lampiran dari Admin - Tiket #${requestId}`
-                );
-
-                if (sendResult.success) {
-                  logger.info(`[Notif]  Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
-                  info.seenAttachmentIds.add(attIdStr);
-                  anyNew = true;
-                } else {
-                  logger.warn(`[Notif]  Gagal mengirim lampiran foto ${attIdStr} ke WA ${targetWa}: ${sendResult.error}`);
-                }
-              } else {
-                logger.warn(`[Notif] Attachment ${attIdStr} gagal didownload atau data kosong`);
-              }
-            }
-          } catch (errAtt) {
+ for (const att of newImageAttachments) {
+ const attIdStr = String(att.id);
+ const imageMime = getImageMime(att);
+ logger.info(`[Notif] Mendownload attachment tiket ${attIdStr} (${att.name}) dari tiket ${requestId}...`);
+ const fileData = await ticketSvc.downloadTicketAttachment(requestId, att.id, imageMime);
+ if (fileData && fileData.data) {
+ const finalMime = (fileData.content_type || '').startsWith('image/')
+ ? fileData.content_type
+ : imageMime;
+ const sendResult = await waSvc.sendMediaToNumber(
+ targetWa,
+ fileData.data,
+ finalMime,
+ att.name || `lampiran_${att.id}.jpg`,
+ `[Lampiran] Lampiran dari Admin - Tiket #${requestId}`
+ );
+ if (sendResult.success) {
+ logger.info(`[Notif] Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
+ info.seenAttachmentIds.add(attIdStr);
+ anyNew = true;
+ } else {
+ logger.warn(`[Notif] Gagal mengirim lampiran foto ${attIdStr} ke WA ${targetWa}: ${sendResult.error}`);
+ }
+ }
+ }
+ } catch (errAtt) {
             logger.warn(`[Notif] Error saat memproses attachment tiket ${requestId}: ${errAtt.message}`);
           }
         }
@@ -848,7 +904,7 @@ async function pollTicketImmediate(requestId) {
  * @param {object|null}   verifiedUser   - Data user dari lookupUserByEmail (untuk pesan ke atasan)
  * @param {string|null}   appName        - Nama aplikasi dari form staf (untuk pesan ke atasan)
  */
-function registerTicket(requestId, waNumber, supervisorWa = null, supervisorMeId = null, verifiedUser = null, appName = null) {
+function registerTicket(requestId, waNumber, supervisorWa = null, supervisorMeId = null, verifiedUser = null, appName = null, initialAttachmentIds = []) {
   const id = String(requestId);
   if (trackedTickets.has(id)) {
     logger.info(`[Notif] Tiket ${id} sudah terdaftar - skip duplikat.`);

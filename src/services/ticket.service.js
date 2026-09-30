@@ -1207,7 +1207,7 @@ async function uploadAttachments(requestId, mediaList) {
     mediaList = [mediaList];
   }
 
-  const result = { success: false, uploaded: 0, failed: 0, errors: [] };
+  const result = { success: false, uploaded: 0, failed: 0, errors: [], attachmentIds: [] };
   const FormData = require('form-data');
 
   for (let i = 0; i < mediaList.length; i++) {
@@ -1257,10 +1257,11 @@ async function uploadAttachments(requestId, mediaList) {
         result.errors.push(`Gagal upload foto ke-${i+1}`);
       } else {
         logger.info(
-          `[Ticket]  Foto ke-${i+1} berhasil diunggah dan ditautkan ke tiket ${requestId} - ` +
+          `[Ticket] Foto ke-${i+1} berhasil diunggah dan ditautkan ke tiket ${requestId} - ` +
           `attachment ID: ${attachmentId}, nama: ${attachment.name || filename}`
         );
         result.uploaded++;
+        result.attachmentIds.push(String(attachmentId));
       }
 
     } catch (error) {
@@ -1335,13 +1336,92 @@ async function downloadTicketAttachment(requestId, attachmentId, contentType = n
       || contentType
       || 'application/octet-stream';
 
-    logger.info(`[Ticket]  Attachment ${attachmentId} didownload - ${response.data.byteLength} bytes, mime: ${mime}`);
+    logger.info(`[Ticket] Attachment ${attachmentId} didownload - ${response.data.byteLength} bytes, mime: ${mime}`);
     return {
       data: Buffer.from(response.data).toString('base64'),
       content_type: mime.split(';')[0].trim()  // hapus bagian "; charset=..." jika ada
     };
   } catch (error) {
     logger.warn(`[Ticket] Gagal mendownload attachment ${attachmentId} tiket ${requestId}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Mengunduh gambar inline dari URL ManageEngine (misal dari notif.description tag <img>).
+ * Sesuai pola: /api/v3/requests/:request_id/notifications/:notification_id/images/:image_id
+ * @param {string} imagePathOrUrl - Path relatif atau URL lengkap gambar
+ */
+async function downloadInlineImage(imagePathOrUrl) {
+  try {
+    let url = imagePathOrUrl;
+    if (!url.startsWith('http')) {
+      const base = ENDPOINT_REQUESTS_BASE.replace('/api/v3/requests', '');
+      url = `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+    logger.info(`[Ticket] Mendownload inline image - GET ${url}`);
+    const response = await axios.get(url, {
+      headers: {
+        'TECHNICIAN_KEY': TECHNICIAN_KEY,
+        'PORTALID': PORTAL_ID,
+        'Accept': '*/*'
+      },
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      maxRedirects: 5,
+      maxContentLength: 20 * 1024 * 1024
+    });
+
+    if (!response.data || response.data.byteLength === 0) {
+      logger.warn(`[Ticket] Inline image ${url} - response kosong`);
+      return null;
+    }
+
+    const mime = (response.headers['content-type'] || 'image/jpeg').split(';')[0].trim();
+    logger.info(`[Ticket] Inline image didownload - ${response.data.byteLength} bytes, mime: ${mime}`);
+    return {
+      data: Buffer.from(response.data).toString('base64'),
+      content_type: mime
+    };
+  } catch (error) {
+    logger.warn(`[Ticket] Gagal download inline image ${imagePathOrUrl}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Mengunduh file attachment spesifik pada notifikasi.
+ * Sesuai Postman: GET /api/v3/requests/:request_id/notifications/:notification_id/attachments/:attachment_id/download
+ */
+async function downloadNotificationAttachment(requestId, notifId, attachmentId) {
+  try {
+    const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/notifications/${notifId}/attachments/${attachmentId}/download`;
+    logger.info(`[Ticket] Mendownload attachment notifikasi ${attachmentId} - GET ${endpoint}`);
+    const response = await axios.get(endpoint, {
+      headers: {
+        'TECHNICIAN_KEY': TECHNICIAN_KEY,
+        'PORTALID': PORTAL_ID,
+        'Accept': '*/*'
+      },
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      maxRedirects: 5,
+      maxContentLength: 20 * 1024 * 1024
+    });
+
+    if (!response.data || response.data.byteLength === 0) {
+      logger.warn(`[Ticket] Notif attachment ${attachmentId} - response kosong`);
+      return null;
+    }
+
+    const mime = (response.headers['content-type'] || 'application/octet-stream').split(';')[0].trim();
+    logger.info(`[Ticket] Notif attachment ${attachmentId} didownload - ${response.data.byteLength} bytes, mime: ${mime}`);
+    return {
+      data: Buffer.from(response.data).toString('base64'),
+      content_type: mime
+    };
+  } catch (error) {
+    logger.warn(`[Ticket] Gagal download notif attachment ${attachmentId}: ${error.message}`);
     return null;
   }
 }
@@ -1360,5 +1440,7 @@ module.exports = {
   addApproverToLevel,
   uploadAttachments,
   getTicketAttachments,
-  downloadTicketAttachment
+  downloadTicketAttachment,
+  downloadInlineImage,
+  downloadNotificationAttachment
 };

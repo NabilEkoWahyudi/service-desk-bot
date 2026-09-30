@@ -1,7 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * APPROVAL SERVICE — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * APPROVAL SERVICE - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Mengelola pending approval untuk kategori AUTORISASI.
  *
@@ -34,7 +34,7 @@ const path            = require('path');
 const logger          = require('../utils/logger');
 const encryptedStore  = require('../utils/encrypted-store');
 
-// ─── Konfigurasi (dari env, tidak hardcoded) ──────────────────────────────────
+// --- Konfigurasi (dari env, tidak hardcoded) ----------------------------------
 
 /**
  * Durasi maksimum pending approval sebelum dianggap expired.
@@ -46,24 +46,24 @@ const MAX_APPROVAL_DURATION_MS = APPROVAL_MAX_DAYS * 24 * 60 * 60 * 1000;
 /**
  * Path file persisten pending approvals.
  * Selalu berada di folder data/ relatif terhadap project root.
- * Folder data/ sudah masuk .gitignore — tidak akan ter-commit ke git.
+ * Folder data/ sudah masuk .gitignore - tidak akan ter-commit ke git.
  */
 const APPROVAL_DATA_FILE = path.join(__dirname, '../../data/pending_approvals.json');
 
-// ─── In-Memory Store ──────────────────────────────────────────────────────────
+// --- In-Memory Store ----------------------------------------------------------
 // Map<supervisorWaNumber, ApprovalItem[]>
 const pendingApprovals = new Map();
 
-// ─── Persistence ─────────────────────────────────────────────────────────────
+// --- Persistence -------------------------------------------------------------
 
 /**
  * Muat pending approvals dari disk ke memori.
  *
- * ⚠️  PENTING: Fungsi ini HANYA membaca file — tidak mengirim pesan WA apapun.
+ * [PERINGATAN]  PENTING: Fungsi ini HANYA membaca file - tidak mengirim pesan WA apapun.
  *     Aman dipanggil saat startup tanpa risiko pengiriman pesan tidak sengaja.
  *
  * Dipanggil SEKALI dari index.js via initApprovalService(), setelah WhatsApp
- * siap — bukan otomatis saat modul diimpor.
+ * siap - bukan otomatis saat modul diimpor.
  *
  * Approval yang sudah expired (> APPROVAL_MAX_DAYS hari) otomatis dibuang.
  */
@@ -87,7 +87,7 @@ function loadPendingApprovals() {
     }
 
     if (loaded === 0 && expired === 0) {
-      logger.info('[Approval] File pending_approvals.json belum ada atau kosong — mulai dengan store kosong.');
+      logger.info('[Approval] File pending_approvals.json belum ada atau kosong - mulai dengan store kosong.');
     } else {
       logger.info(
         `[Approval] Startup: ${loaded} pending approval dimuat dari disk` +
@@ -96,10 +96,10 @@ function loadPendingApprovals() {
         (encryptedStore.ENCRYPTION_ENABLED ? ' [terenkripsi]' : ' [plain JSON]')
       );
     }
-    logger.info('[Approval] ℹ️  Tidak ada pesan WA yang dikirim saat startup — hanya baca dari disk.');
+    logger.info('[Approval] Info:  Tidak ada pesan WA yang dikirim saat startup - hanya baca dari disk.');
 
   } catch (err) {
-    logger.warn(`[Approval] Gagal memuat pending approvals dari disk: ${err.message} — mulai dengan store kosong.`);
+    logger.warn(`[Approval] Gagal memuat pending approvals dari disk: ${err.message} - mulai dengan store kosong.`);
   }
 }
 
@@ -117,19 +117,19 @@ function savePendingApprovals() {
   }, 500);
 }
 
-// ─── Inisialisasi Eksplisit ────────────────────────────────────────────────────
+// --- Inisialisasi Eksplisit ----------------------------------------------------
 
 /**
  * Inisialisasi Approval Service.
- * Dipanggil SEKALI dari index.js saat server startup — setelah WhatsApp siap.
+ * Dipanggil SEKALI dari index.js saat server startup - setelah WhatsApp siap.
  *
- * Tidak mengirim pesan WA apapun — hanya memuat data dari disk ke memori.
+ * Tidak mengirim pesan WA apapun - hanya memuat data dari disk ke memori.
  */
 function initApprovalService() {
   loadPendingApprovals();
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// --- Public API ---------------------------------------------------------------
 
 /**
  * Tambahkan pending approval untuk seorang atasan.
@@ -163,7 +163,7 @@ function addPendingApproval(supervisorWaNumber, approvalData) {
   });
   pendingApprovals.set(supervisorWaNumber, existing);
   savePendingApprovals();
-  logger.info(`[Approval] Pending approval ditambahkan untuk atasan ${supervisorWaNumber} — tiket: ${approvalData.requestId}, supervisorMeId: ${approvalData.supervisorMeId || 'tidak diketahui'}, antrian: ${existing.length}`);
+  logger.info(`[Approval] Pending approval ditambahkan untuk atasan ${supervisorWaNumber} - tiket: ${approvalData.requestId}, supervisorMeId: ${approvalData.supervisorMeId || 'tidak diketahui'}, antrian: ${existing.length}`);
 }
 
 /**
@@ -237,7 +237,7 @@ function getSupervisorWaByRequestId(requestId) {
   return null;
 }
 
-// ─── Reminder Scheduler ───────────────────────────────────────────────────────
+// --- Reminder Scheduler -------------------------------------------------------
 
 /**
  * Durasi sebelum reminder dikirim (default: 1 jam).
@@ -282,11 +282,11 @@ async function checkAndSendReminders() {
     // Hanya kirim jika sudah melewati batas waktu reminder
     if (ageMs < REMINDER_AFTER_MS) continue;
 
-    // Hanya kirim 1x reminder — jika sudah pernah diingatkan, skip selamanya
+    // Hanya kirim 1x reminder - jika sudah pernah diingatkan, skip selamanya
     if (oldest.remindedCount && oldest.remindedCount >= 1) continue;
 
     const ageHours = Math.floor(ageMs / (60 * 60 * 1000));
-    // Format *Label* : value — mobile-friendly, tanpa padding
+    // Format *Label* : value - mobile-friendly, tanpa padding
     const dataLines = [
       `*Nama Aplikasi* : ${oldest.appName || ''}`,
       `*Nomor Induk Pegawai* : ${oldest.nip || ''}`,
@@ -297,12 +297,12 @@ async function checkAndSendReminders() {
       `*No. Tiket* : ${oldest.requestId}`,
     ].join('\n');
     const reminderMsg =
-      `*[Pengingat — IT Service Desk PLN Batam]*\n\n` +
+      `*[Pengingat - IT Service Desk PLN Batam]*\n\n` +
       `Anda memiliki permintaan *Pembuatan atau Perubahan Otorisasi Aplikasi* yang belum mendapat respons sejak *${ageHours} jam* lalu:\n\n` +
       dataLines +
       `\n\nSilakan balas dengan:\n` +
-      ` *APPROVE* — untuk menyetujui\n` +
-      ` *REJECT*  — untuk menolak`;
+      ` *APPROVE* - untuk menyetujui\n` +
+      ` *REJECT*  - untuk menolak`;
 
     const result = await sendMessageToNumber(supervisorWa, reminderMsg);
     if (result.success) {
@@ -310,7 +310,7 @@ async function checkAndSendReminders() {
       oldest.lastRemindedAt = now;
       savePendingApprovals();
       remindersSent++;
-      logger.info(`[Approval] ⏰ Reminder dikirim ke atasan ${supervisorWa} untuk tiket ${oldest.requestId} (${ageHours} jam menunggu) — tidak ada reminder berikutnya.`);
+      logger.info(`[Approval]  Reminder dikirim ke atasan ${supervisorWa} untuk tiket ${oldest.requestId} (${ageHours} jam menunggu) - tidak ada reminder berikutnya.`);
     } else {
       logger.warn(`[Approval] Gagal kirim reminder ke ${supervisorWa}: ${result.error}`);
     }
@@ -329,7 +329,7 @@ async function checkAndSendReminders() {
  */
 function startApprovalReminders() {
   logger.info(
-    `[Approval] Scheduler reminder aktif — periksa setiap 15 menit, ` +
+    `[Approval] Scheduler reminder aktif - periksa setiap 15 menit, ` +
     `kirim reminder 1x jika approval belum dijawab > ${Math.floor(REMINDER_AFTER_MS / (60 * 60 * 1000))} jam.`
   );
   // Pemeriksaan pertama: 5 menit setelah startup

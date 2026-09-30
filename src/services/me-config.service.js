@@ -1,7 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * ME CONFIG SERVICE — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * ME CONFIG SERVICE - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Mengambil ID secara dinamis untuk Group, Level, dan Service Category
  * berdasarkan namanya dari ManageEngine ServiceDesk Plus API v3.
@@ -41,7 +41,7 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 jam
  */
 function describeAxiosError(err) {
   if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-    return `Timeout (${err.code}) — ManageEngine lambat merespons`;
+    return `Timeout (${err.code}) - ManageEngine lambat merespons`;
   }
   if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
     return `Tidak dapat terhubung ke ManageEngine (${err.code})`;
@@ -82,7 +82,7 @@ async function fetchEntityId(endpoint, entityKey, targetName) {
     const items = response.data?.[entityKey] || [];
 
     if (items.length === 0) {
-      logger.warn(`[MeConfig] Nama "${targetName}" tidak ditemukan di ${entityKey} (response kosong) — akan pakai ID dari .env`);
+      logger.warn(`[MeConfig] Nama "${targetName}" tidak ditemukan di ${entityKey} (response kosong) - akan pakai ID dari .env`);
       return null;
     }
 
@@ -92,12 +92,12 @@ async function fetchEntityId(endpoint, entityKey, targetName) {
       return String(found.id);
     }
 
-    logger.warn(`[MeConfig] Nama "${targetName}" tidak cocok dengan ${items.length} item di ${entityKey} — akan pakai ID dari .env`);
+    logger.warn(`[MeConfig] Nama "${targetName}" tidak cocok dengan ${items.length} item di ${entityKey} - akan pakai ID dari .env`);
     return null;
 
   } catch (err) {
     const desc = describeAxiosError(err);
-    logger.warn(`[MeConfig] Gagal fetch ${entityKey} untuk "${targetName}": ${desc} — akan pakai ID dari .env`);
+    logger.warn(`[MeConfig] Gagal fetch ${entityKey} untuk "${targetName}": ${desc} - akan pakai ID dari .env`);
     return null;
   }
 }
@@ -106,7 +106,7 @@ async function fetchEntityId(endpoint, entityKey, targetName) {
  * Dapatkan semua ID konfigurasi ManageEngine.
  * Hasil di-cache di memori selama CACHE_TTL (1 jam) untuk mengurangi beban API.
  *
- * Jika semua fetch gagal → bot tetap berjalan menggunakan ID dari .env.
+ * Jika semua fetch gagal -> bot tetap berjalan menggunakan ID dari .env.
  * @returns {Promise<{ groupId: string, levelId: string, serviceCategoryId: string }>}
  */
 async function getMeConfigIds() {
@@ -138,7 +138,7 @@ async function getMeConfigIds() {
   cacheTimestamp = now;
 
   logger.info(
-    `[MeConfig] ID Berhasil di-resolve → ` +
+    `[MeConfig] ID Berhasil di-resolve -> ` +
     `Group: ${groupId} [${srcGroup}], ` +
     `Level: ${levelId} [${srcLevel}], ` +
     `Service Category: ${serviceCategoryId} [${srcSvcCat}]`

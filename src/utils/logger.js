@@ -7,16 +7,16 @@ if (!fs.existsSync('logs')) {
   fs.mkdirSync('logs', { recursive: true });
 }
 
-// ─── Item 4: Audit Log Redaction ──────────────────────────────────────────────
+// --- Item 4: Audit Log Redaction ----------------------------------------------
 // Filter ini menyensor data sensitif dari semua log entry agar tidak tersimpan
 // email pegawai atau konten tiket secara plain text di file log.
 const REDACT_PATTERNS = [
-  // Email → tampilkan hanya 2 huruf pertama + domain
+  // Email -> tampilkan hanya 2 huruf pertama + domain
   {
     pattern: /([a-zA-Z0-9._%+-]{2})[a-zA-Z0-9._%+-]*(@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
     replacement: '$1**$2'
   },
-  // Nomor HP/WA (08xxx atau 628xxx) → sensor 4 digit tengah
+  // Nomor HP/WA (08xxx atau 628xxx) -> sensor 4 digit tengah
   {
     pattern: /(628|08)(\d{2,4})(\d{4})(\d{2,4})/g,
     replacement: '$1$2****$4'
@@ -57,7 +57,7 @@ const fileFormat = winston.format.combine(
   winston.format.json()
 );
 
-// S5: Log rotation — simpan per hari, maks 14 hari, maks 20MB per file
+// S5: Log rotation - simpan per hari, maks 14 hari, maks 20MB per file
 const rotateTransportCombined = new winston.transports.DailyRotateFile({
   filename: 'logs/combined-%DATE%.log',
   datePattern: 'YYYY-MM-DD',

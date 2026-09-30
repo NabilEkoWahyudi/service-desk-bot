@@ -1,7 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * SESSION SERVICE — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * SESSION SERVICE - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Mengelola persistensi session ke disk.
  *
@@ -9,7 +9,7 @@
  *   SESSION_SECRET di-set di .env. Jika tidak di-set, data tetap
  *   disimpan plain JSON dengan peringatan (backwards compatible).
  *
- * Item 7: Ghost lock — pada saat loadSessions(), semua session
+ * Item 7: Ghost lock - pada saat loadSessions(), semua session
  *   yang terkunci (state CONFIRMING/FILLING_FORM) di-reset agar
  *   tidak ada state basi setelah server restart.
  */
@@ -27,14 +27,14 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-// ─── Item 6: Setup Enkripsi ────────────────────────────────────────────────────
+// --- Item 6: Setup Enkripsi ----------------------------------------------------
 // AES-256-GCM membutuhkan key 32 byte.
 // Key diturunkan dari SESSION_SECRET menggunakan SHA-256.
 const SESSION_SECRET = process.env.SESSION_SECRET || null;
 const ENCRYPTION_ENABLED = !!SESSION_SECRET;
 
 if (!ENCRYPTION_ENABLED) {
-  logger.warn('[SessionService] SESSION_SECRET tidak di-set — session disimpan plain JSON. Set SESSION_SECRET di .env untuk enkripsi.');
+  logger.warn('[SessionService] SESSION_SECRET tidak di-set - session disimpan plain JSON. Set SESSION_SECRET di .env untuk enkripsi.');
 }
 
 /**
@@ -52,7 +52,7 @@ function encrypt(plainText) {
   const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
   const authTag   = cipher.getAuthTag();
 
-  // Gunakan '|' sebagai separator — hex tidak mengandung '|' sehingga aman
+  // Gunakan '|' sebagai separator - hex tidak mengandung '|' sehingga aman
   return `${iv.toString('hex')}|${authTag.toString('hex')}|${encrypted.toString('base64')}`;
 }
 
@@ -65,7 +65,7 @@ function encrypt(plainText) {
  * mungkin muncul di hex atau base64, sehingga parsing selalu akurat.
  */
 function decrypt(encryptedText) {
-  // Split maksimum 3 bagian — iv|authTag|ciphertext
+  // Split maksimum 3 bagian - iv|authTag|ciphertext
   const parts = encryptedText.split('|');
   if (parts.length !== 3) {
     throw new Error('Format enkripsi tidak valid');
@@ -83,7 +83,7 @@ function decrypt(encryptedText) {
   return decipher.update(ciphertext, 'binary', 'utf8') + decipher.final('utf8');
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// --- Helpers -------------------------------------------------------------------
 
 /**
  * Baca dan parse file session dari disk
@@ -99,7 +99,7 @@ function readSessionFile() {
       const decrypted = decrypt(raw);
       return JSON.parse(decrypted);
     } catch (_) {
-      logger.warn('[SessionService] Gagal dekripsi file session — kemungkinan format lama. Mereset sesi.');
+      logger.warn('[SessionService] Gagal dekripsi file session - kemungkinan format lama. Mereset sesi.');
       return {};
     }
   }
@@ -108,7 +108,7 @@ function readSessionFile() {
   try {
     return JSON.parse(raw);
   } catch (_) {
-    logger.warn('[SessionService] File session tidak valid (bukan JSON) — mereset sesi.');
+    logger.warn('[SessionService] File session tidak valid (bukan JSON) - mereset sesi.');
     return {};
   }
 }
@@ -125,7 +125,7 @@ function writeSessionFile(obj) {
   }
 }
 
-// ─── Public API ────────────────────────────────────────────────────────────────
+// --- Public API ----------------------------------------------------------------
 
 /**
  * Memuat sesi dari file dan melakukan pembersihan state basi (Item 7: Ghost Lock)
@@ -138,7 +138,7 @@ function loadSessions() {
     const parsed = readSessionFile();
     const sessionsMap = new Map(Object.entries(parsed));
 
-    // ─── Item 7: Ghost Lock Prevention ──────────────────────────────────────
+    // --- Item 7: Ghost Lock Prevention --------------------------------------
     // Setelah server restart, semua processingLock in-memory sudah terhapus.
     // Reset state aktif ke IDLE agar user memulai dari awal.
     let ghostCount = 0;
@@ -178,7 +178,7 @@ function saveSessions(sessionsMap) {
   try {
     const obj = Object.fromEntries(sessionsMap);
 
-    // Simpan hanya field yang diperlukan — tidak ada pdfBuffer (sudah dihapus)
+    // Simpan hanya field yang diperlukan - tidak ada pdfBuffer (sudah dihapus)
     const safeObj = {};
     for (const [key, session] of Object.entries(obj)) {
       safeObj[key] = {

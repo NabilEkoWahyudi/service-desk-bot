@@ -1,7 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * ENCRYPTED STORE — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * ENCRYPTED STORE - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Helper untuk membaca dan menulis file JSON yang dienkripsi
  * menggunakan AES-256-GCM (sama dengan session.service.js).
@@ -12,8 +12,8 @@
  *   - message.handler.js   (ratelimit.json)
  *
  * Perilaku:
- *   - Jika SESSION_SECRET di-set → file ditulis/dibaca dalam format terenkripsi
- *   - Jika SESSION_SECRET kosong → plain JSON (backwards compatible)
+ *   - Jika SESSION_SECRET di-set -> file ditulis/dibaca dalam format terenkripsi
+ *   - Jika SESSION_SECRET kosong -> plain JSON (backwards compatible)
  *   - File lama (plain JSON) otomatis terdeteksi dan dibaca dengan benar
  */
 
@@ -27,7 +27,7 @@ const logger = require('./logger');
 const SESSION_SECRET    = process.env.SESSION_SECRET || null;
 const ENCRYPTION_ENABLED = !!SESSION_SECRET;
 
-// ─── Internal Crypto (AES-256-GCM) ───────────────────────────────────────────
+// --- Internal Crypto (AES-256-GCM) -------------------------------------------
 
 /**
  * Enkripsi string plain menjadi format: "iv_hex|authTag_hex|ciphertext_base64"
@@ -66,13 +66,13 @@ function _decrypt(encryptedText) {
   return decipher.update(ciphertext, 'binary', 'utf8') + decipher.final('utf8');
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// --- Public API ---------------------------------------------------------------
 
 /**
  * Baca file JSON (plain atau terenkripsi) dari disk.
  *
- * Auto-detect: jika konten diawali '{' atau '[' → anggap plain JSON.
- * Selain itu → coba dekripsi dulu (jika enkripsi aktif).
+ * Auto-detect: jika konten diawali '{' atau '[' -> anggap plain JSON.
+ * Selain itu -> coba dekripsi dulu (jika enkripsi aktif).
  *
  * @param {string} filePath    - Path absolut ke file
  * @param {any}    defaultVal  - Nilai default jika file tidak ada atau gagal dibaca
@@ -90,18 +90,18 @@ function readJson(filePath, defaultVal = {}) {
       return JSON.parse(raw);
     }
 
-    // Bukan plain JSON — coba dekripsi jika enkripsi aktif
+    // Bukan plain JSON - coba dekripsi jika enkripsi aktif
     if (ENCRYPTION_ENABLED) {
       try {
         return JSON.parse(_decrypt(raw));
       } catch (_) {
-        logger.warn(`[EncryptedStore] Gagal dekripsi ${path.basename(filePath)} — mereset ke default`);
+        logger.warn(`[EncryptedStore] Gagal dekripsi ${path.basename(filePath)} - mereset ke default`);
         return defaultVal;
       }
     }
 
-    // Enkripsi tidak aktif tapi format tidak dikenali — reset
-    logger.warn(`[EncryptedStore] Format file ${path.basename(filePath)} tidak dikenali — mereset ke default`);
+    // Enkripsi tidak aktif tapi format tidak dikenali - reset
+    logger.warn(`[EncryptedStore] Format file ${path.basename(filePath)} tidak dikenali - mereset ke default`);
     return defaultVal;
 
   } catch (err) {

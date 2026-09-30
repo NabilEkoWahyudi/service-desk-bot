@@ -467,7 +467,8 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply, rateRe
  requestId, waNumber,
  supervisorWa, supervisorMeId,
  verifiedUser,
- session.data.nama_aplikasi || null
+ session.data.nama_aplikasi || null,
+ attachmentUploaded?.attachmentIds || []
  );
  logger.info(
  `[Handler] Tiket AUTORISASI ${requestId} didaftarkan - ` +
@@ -1378,7 +1379,7 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
  // Agar setiap notifikasi/balasan dari admin di ManageEngine
  // diteruskan langsung ke WhatsApp pegawai ini.
  if (result.requestId) {
- registerTicket(result.requestId, waNumber);
+ registerTicket(result.requestId, waNumber, null, null, null, null, uploadResult?.attachmentIds || []);
  }
 
  const successLines = [

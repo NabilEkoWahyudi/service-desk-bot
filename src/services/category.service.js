@@ -1,25 +1,25 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * CATEGORY SERVICE — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * CATEGORY SERVICE - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Mengambil data kategori dan subkategori dari ManageEngine
  * ServiceDesk Plus API v3 secara dinamis, lalu menyimpannya
  * ke dalam cache memori.
  *
  * Menggantikan SUBCATEGORY_MAP yang sebelumnya di-hardcode di
- * endpoints.js — kini data selalu sinkron dengan ManageEngine.
+ * endpoints.js - kini data selalu sinkron dengan ManageEngine.
  *
  * Endpoint yang digunakan (dari Postman Collection On-Premise):
  *   GET /api/v3/categories
- *     → input_data: { list_info: { row_count, start_index, ... } }
+ *     -> input_data: { list_info: { row_count, start_index, ... } }
  *   GET /api/v3/categories/:category_id/subcategories
- *     → input_data: { list_info: { row_count, start_index, ... } }
+ *     -> input_data: { list_info: { row_count, start_index, ... } }
  *
  * Alur:
- *   1. fetchAllCategories()  — ambil semua kategori (paginasi)
- *   2. Untuk setiap kategori → fetchSubcategoriesForCategory()
- *   3. Bentuk map: appName (lowercase) → { categoryId, categoryName,
+ *   1. fetchAllCategories()  - ambil semua kategori (paginasi)
+ *   2. Untuk setiap kategori -> fetchSubcategoriesForCategory()
+ *   3. Bentuk map: appName (lowercase) -> { categoryId, categoryName,
  *                                          subcategoryId, subcategoryName }
  *   4. Simpan ke cachedMap. Expire otomatis setelah CACHE_TTL_MS.
  */
@@ -28,7 +28,7 @@ const axios  = require('axios');
 const logger = require('../utils/logger');
 const { TECHNICIAN_KEY, ME_BASE_URL } = require('../config/endpoints');
 
-// ─── Auth Headers (sama persis dengan ticket.service.js) ───────────────────
+// --- Auth Headers (sama persis dengan ticket.service.js) -------------------
 const PORTAL_ID = process.env.PORTAL_ID || 'SDP';
 
 const AUTH_HEADERS = {
@@ -37,7 +37,7 @@ const AUTH_HEADERS = {
   'Accept': 'application/vnd.manageengine.sdp.v3+json'
 };
 
-// ─── Cache ──────────────────────────────────────────────────────────────────
+// --- Cache ------------------------------------------------------------------
 /**
  * Cache TTL: 1 jam. Setelah habis, fetch ulang saat permintaan berikutnya.
  * Bisa di-override via env var CATEGORY_CACHE_TTL_MS (dalam milidetik).
@@ -48,7 +48,7 @@ const CACHE_TTL_MS = parseInt(process.env.CATEGORY_CACHE_TTL_MS || String(60 * 6
 let cachedMap = null;
 let cacheBuiltAt = 0;
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// --- Helpers ----------------------------------------------------------------
 
 /**
  * Ambil semua halaman dari sebuah endpoint ManageEngine dengan paginasi otomatis.
@@ -83,7 +83,7 @@ async function fetchAllPages(url, resultKey, pageSize = 100) {
     const items = response.data?.[resultKey] || [];
     results.push(...items);
 
-    // Gunakan has_more_rows dari response — sesuai format API ManageEngine On-Premise
+    // Gunakan has_more_rows dari response - sesuai format API ManageEngine On-Premise
     // Contoh list_info: { "has_more_rows": false, "total_count": 13, ... }
     const listInfo = response.data?.list_info || {};
     hasMore = listInfo.has_more_rows === true;
@@ -112,7 +112,7 @@ async function fetchSubcategoriesForCategory(categoryId) {
   }
 }
 
-// ─── Core ───────────────────────────────────────────────────────────────────
+// --- Core -------------------------------------------------------------------
 
 /**
  * Bangun map subkategori dari API ManageEngine.
@@ -148,13 +148,13 @@ async function buildSubcategoryMap() {
       const subcategoryName = sub.name || '';
       if (!subcategoryId || !subcategoryName) continue;
 
-      // Ambil categoryId & categoryName dari field sub.category — lebih akurat
+      // Ambil categoryId & categoryName dari field sub.category - lebih akurat
       // karena setiap subcategory object sudah memiliki referensi kategorinya sendiri.
       // Contoh response: { "id": "53", "name": "Presales", "category": { "id": "16", "name": "Aplikasi Pendukung" } }
       const catId   = String(sub.category?.id   || categoryId);
       const catName = String(sub.category?.name || '');
 
-      // Key: nama subkategori lowercase — cocok dengan lookup di ticket.service.js
+      // Key: nama subkategori lowercase - cocok dengan lookup di ticket.service.js
       const key = subcategoryName.toLowerCase().trim();
 
       map[key] = {
@@ -170,7 +170,7 @@ async function buildSubcategoryMap() {
   return map;
 }
 
-// ─── Public API ─────────────────────────────────────────────────────────────
+// --- Public API -------------------------------------------------------------
 
 /**
  * Ambil map subkategori.
@@ -198,7 +198,7 @@ async function getSubcategoryMap() {
       return cachedMap;
     }
 
-    // Tidak ada cache sama sekali — kembalikan objek kosong agar bot tetap berjalan
+    // Tidak ada cache sama sekali - kembalikan objek kosong agar bot tetap berjalan
     return {};
   }
 

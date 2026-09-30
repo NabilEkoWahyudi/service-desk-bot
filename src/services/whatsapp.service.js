@@ -818,62 +818,63 @@ async function sendMediaToNumber(waNumber, base64Data, mimeType, filename, capti
 
     const chatId = waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`;
 
-    // Pastikan mime adalah image yang valid — jangan gunakan application/x-download
-    // karena WA Web tidak bisa memprosesnya
+    // Pastikan mime adalah image yang valid
     let safeMime = mimeType;
     if (!mimeType || !mimeType.startsWith('image/')) {
-      // Deteksi dari nama file
       const fnLower = (filename || '').toLowerCase();
-      if (fnLower.endsWith('.png'))  safeMime = 'image/png';
+      if (fnLower.endsWith('.png'))       safeMime = 'image/png';
       else if (fnLower.endsWith('.gif'))  safeMime = 'image/gif';
       else if (fnLower.endsWith('.webp')) safeMime = 'image/webp';
-      else safeMime = 'image/jpeg'; // default
+      else                                safeMime = 'image/jpeg';
     }
 
-    // Tentukan ekstensi untuk nama file yang aman
     let safeFilename = filename || `lampiran_${Date.now()}.jpg`;
     if (!path.extname(safeFilename)) {
       safeFilename += safeMime === 'image/png' ? '.png' : '.jpg';
     }
 
-    const sizeBytes = Math.round(Buffer.from(base64Data, 'base64').length);
-    logger.info(`[WhatsApp] Mengirim media ke ${waNumber}: mime=${safeMime}, file=${safeFilename}, size=${Math.round(sizeBytes/1024)}KB`);
+    const sizeKb = Math.round(Buffer.from(base64Data, 'base64').length / 1024);
+    logger.info(`[WhatsApp] Mengirim media ke ${waNumber}: mime=${safeMime}, file=${safeFilename}, size=${sizeKb}KB`);
 
-    // Buat MessageMedia dengan mime yang sudah benar
-    const media = new MessageMedia(safeMime, base64Data, safeFilename);
-
-    // Kirim menggunakan waClient.sendMessage() — cara yang sama dengan sendMessageToNumber
-    await waClient.sendMessage(chatId, media, { caption });
-
-    logger.info(`[WhatsApp] Lampiran media berhasil terkirim ke ${waNumber}`);
-    return { success: true };
-  } catch (err) {
-    logger.error(`[WhatsApp] Gagal kirim media ke ${waNumber}: ${err.message || err}`);
-
-    // Coba fallback: tulis ke file temp lalu kirim via fromFilePath
-    logger.info(`[WhatsApp] Mencoba fallback via file temp untuk ${waNumber}...`);
+    // Strategi 1: kirim sebagai foto (image)
     try {
-      const ext = (mimeType === 'image/png') ? '.png' : '.jpg';
-      tmpPath = path.join(os.tmpdir(), `wa_fallback_${Date.now()}${ext}`);
-      fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
-      const mediaFallback = MessageMedia.fromFilePath(tmpPath);
-      await waClient.sendMessage(
-        waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`,
-        mediaFallback,
-        { caption }
-      );
-      logger.info(`[WhatsApp] Fallback berhasil: lampiran media terkirim ke ${waNumber}`);
+      const media = new MessageMedia(safeMime, base64Data, safeFilename);
+      await waClient.sendMessage(chatId, media, { caption });
+      logger.info(`[WhatsApp] [Strategi 1] Foto berhasil terkirim ke ${waNumber}`);
       return { success: true };
-    } catch (fallbackErr) {
-      logger.error(`[WhatsApp] Fallback juga gagal untuk ${waNumber}: ${fallbackErr.message || fallbackErr}`);
-      return { success: false, error: fallbackErr.message || String(fallbackErr) };
+    } catch (err1) {
+      logger.warn(`[WhatsApp] [Strategi 1] Gagal kirim foto ke ${waNumber}: ${err1.message || err1} - mencoba sebagai dokumen...`);
     }
+
+    // Strategi 2: kirim sebagai dokumen (skip image processing WA yang rentan error)
+    try {
+      const media2 = new MessageMedia(safeMime, base64Data, safeFilename);
+      await waClient.sendMessage(chatId, media2, { caption, sendMediaAsDocument: true });
+      logger.info(`[WhatsApp] [Strategi 2] Foto terkirim sebagai dokumen ke ${waNumber}`);
+      return { success: true };
+    } catch (err2) {
+      logger.warn(`[WhatsApp] [Strategi 2] Gagal kirim dokumen ke ${waNumber}: ${err2.message || err2} - mencoba via file temp...`);
+    }
+
+    // Strategi 3: tulis ke file temp, kirim via fromFilePath sebagai dokumen
+    const ext = safeMime === 'image/png' ? '.png' : '.jpg';
+    tmpPath = path.join(os.tmpdir(), `wa_fallback_${Date.now()}${ext}`);
+    fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
+    const mediaFile = MessageMedia.fromFilePath(tmpPath);
+    await waClient.sendMessage(chatId, mediaFile, { caption, sendMediaAsDocument: true });
+    logger.info(`[WhatsApp] [Strategi 3] Foto terkirim via file temp sebagai dokumen ke ${waNumber}`);
+    return { success: true };
+
+  } catch (err) {
+    logger.error(`[WhatsApp] Semua strategi gagal kirim media ke ${waNumber}: ${err.message || err}`);
+    return { success: false, error: err.message || String(err) };
   } finally {
     if (tmpPath && fs.existsSync(tmpPath)) {
       try { fs.unlinkSync(tmpPath); } catch (_) {}
     }
   }
 }
+
 
 
 module.exports = { initWhatsApp, getWhatsAppStatus, closeWhatsApp, restartWhatsApp, sendMessageToNumber, sendMediaToNumber };
