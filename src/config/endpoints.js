@@ -20,7 +20,7 @@ const CATEGORY_CONFIG = {
   PASSWORD: {
     label: 'Permintaan Reset Password',
     endpoint: process.env.ENDPOINT_PASSWORD || 'https://servicedesk.plnbatam.com:8080/api/v3/requests',
-    autoSubject: 'Permintaan Reset Password (Tidak Perlu di Tindaklanjuti)',
+    autoSubject: 'Permintaan Reset Password',
     fields: ['requester', 'nama_aplikasi', 'username_aplikasi'],
     fieldLabels: {
       requester: 'Email Kantor',
@@ -45,7 +45,7 @@ const CATEGORY_CONFIG = {
     // sehingga tiket langsung masuk ke antrian teknisi tanpa perlu persetujuan siapapun.
     // Menggantikan pendekatan auto-approve via API yang selalu gagal.
     seniorTemplateId: process.env.ME_TEMPLATE_AUTORISASI_SENIOR || '2408',
-    autoSubject: 'Pembuatan atau Perubahan Otorisasi Aplikasi (Tidak Perlu di Tindaklanjuti)',
+    autoSubject: 'Pembuatan atau Perubahan Otorisasi Aplikasi',
     fields: ['requester', 'nama_aplikasi', 'username_aplikasi', 'role_assign', 'role_hapus', 'alasan_otorisasi'],
     fieldLabels: {
       requester:         'Email Kantor',
@@ -69,7 +69,7 @@ const CATEGORY_CONFIG = {
   KELUHAN: {
     label: 'Permintaan/Keluhan',
     endpoint: process.env.ENDPOINT_KELUHAN || 'https://servicedesk.plnbatam.com:8080/api/v3/requests',
-    autoSubject: 'Permintaan/Keluhan (Tidak Perlu di Tindaklanjuti)',
+    autoSubject: 'Permintaan/Keluhan',
     fields: ['requester', 'nama_aplikasi', 'username_aplikasi', 'keluhan'],
     fieldLabels: {
       requester: 'Email Kantor',
@@ -87,7 +87,7 @@ const CATEGORY_CONFIG = {
   VPN: {
     label: 'Akses VPN',
     endpoint: process.env.ENDPOINT_VPN || 'https://servicedesk.plnbatam.com:8080/api/v3/requests',
-    autoSubject: 'Akses VPN (Tidak Perlu di Tindaklanjuti)',
+    autoSubject: 'Akses VPN',
     fields: ['requester', 'alasan', 'tgl_awal', 'tgl_akhir'],
     fieldLabels: {
       requester: 'Email Kantor',
