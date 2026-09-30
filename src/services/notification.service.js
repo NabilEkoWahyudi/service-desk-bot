@@ -730,6 +730,11 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
  
  if (!info.seenAttachmentIds) info.seenAttachmentIds = new Set();
 
+				const reqName = info.requesterName || info.staffData?.name || ticketDetailObj?.requester?.name || notif?.to?.[0]?.name || '';
+				const photoCaption = reqName
+					? `[Lampiran] Balasan untuk ${reqName} dengan Nomor Tiket #${requestId}`
+					: `[Lampiran] Balasan dari Admin - Tiket #${requestId}`;
+
  // 1. Ekstrak gambar inline dari notif.description (HTML)
  // ManageEngine menyimpan gambar balasan admin sebagai <img src="/api/v3/.../images/:id" alt="..."/>
  const inlineImages = [];
