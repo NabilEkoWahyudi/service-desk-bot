@@ -1,7 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * WHATSAPP SERVICE — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * WHATSAPP SERVICE - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Mengelola koneksi WhatsApp menggunakan whatsapp-web.js.
  * Menghubungkan pesan masuk ke message.handler.js.
@@ -9,9 +9,9 @@
  * Fix yang diterapkan:
  *   [FIX-1] Timeout naik ke 120 detik (dari 60 detik)
  *   [FIX-2] destroy() selalu dipanggil saat init gagal/timeout
- *           → Chrome tidak lagi zombie setelah init gagal
+ *           -> Chrome tidak lagi zombie setelah init gagal
  *   [FIX-3] Kill Chrome HANYA berdasarkan PID atau session path
- *           → Tidak lagi membunuh Chrome browser milik user
+ *           -> Tidak lagi membunuh Chrome browser milik user
  *   [FIX-4] Cross-platform: Windows (WMIC/PID), Linux/Mac (pkill/kill)
  */
 
@@ -20,7 +20,7 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { exec } = require('child_process');   // [PERF] async exec — tidak memblokir event loop
+const { exec } = require('child_process');   // [PERF] async exec - tidak memblokir event loop
 const { handleMessage } = require('../handlers/message.handler');
 const logger = require('../utils/logger');
 
@@ -29,7 +29,7 @@ let isInitializing = false;   // Guard: cegah double-init saat --watch restart
 let reconnectAttempts = 0;
 let chromePid = null;    // [FIX-3] Simpan PID Chrome Puppeteer untuk targeted cleanup
 
-// ─── Fitur: Chat Only ───────────────────────────────────────────────────
+// --- Fitur: Chat Only ---------------------------------------------------
 // Simpan pesan teks terakhir per nomor WA.
 // Digunakan untuk mengulangi pesan terakhir saat user mengirim stiker.
 // Map<waNumber, string>
@@ -41,7 +41,7 @@ const INIT_TIMEOUT_MS = 120_000;  // [FIX-1] 120 detik
 // Diset lebih besar dari INIT_TIMEOUT_MS agar baru aktif jika timeout JS gagal bekerja
 const INIT_WATCHDOG_MS = INIT_TIMEOUT_MS + 15_000; // 135 detik total
 
-// ─── [FIX-3] Helper: Kill Chrome berdasarkan PID tersimpan ────────────────────
+// --- [FIX-3] Helper: Kill Chrome berdasarkan PID tersimpan --------------------
 // Cross-platform: SIGKILL di Linux/Mac, taskkill di Windows
 // [PERF] Menggunakan exec async agar tidak memblokir event loop Node.js
 async function killChromeByPid(pid) {
@@ -49,7 +49,7 @@ async function killChromeByPid(pid) {
   return new Promise((resolve) => {
     if (os.platform() === 'win32') {
       // Gunakan PowerShell agar error 'no running instance' tidak muncul ke console
-      // [PERF] exec (async) menggantikan execSync — PowerShell spawn tidak memblokir event loop
+      // [PERF] exec (async) menggantikan execSync - PowerShell spawn tidak memblokir event loop
       exec(
         `powershell -NoProfile -Command "Stop-Process -Id ${pid} -Force -ErrorAction SilentlyContinue; Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq ${pid} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`,
         { timeout: 8000 },
@@ -62,7 +62,7 @@ async function killChromeByPid(pid) {
       // Linux / macOS: coba kill process group dulu, lalu fallback ke kill PID langsung
       // process.kill(-pid) hanya bekerja jika PID adalah process group leader
       try { process.kill(-pid, 'SIGKILL'); } catch (_) {
-        // Bukan group leader — langsung kill PID
+        // Bukan group leader - langsung kill PID
         try { process.kill(pid, 'SIGKILL'); } catch (_2) { }
       }
       // Fallback: pkill --pgroup untuk memastikan seluruh subtree Chrome ikut mati
@@ -79,8 +79,8 @@ async function killChromeByPid(pid) {
   });
 }
 
-// ─── [FIX-3] Helper: Kill Chrome Puppeteer berdasarkan session path ───────────
-// Windows : PowerShell WMI — hanya Chrome yang command line-nya mengandung 'wwebjs_auth'
+// --- [FIX-3] Helper: Kill Chrome Puppeteer berdasarkan session path -----------
+// Windows : PowerShell WMI - hanya Chrome yang command line-nya mengandung 'wwebjs_auth'
 // Linux   : pkill berdasarkan pattern argumen --user-data-dir=.../.wwebjs_auth
 // Ini TIDAK membunuh Chrome browser biasa milik user.
 // [PERF] Menggunakan exec async agar WMI query tidak memblokir event loop
@@ -91,7 +91,7 @@ async function killStaleWWebChrome() {
     if (platform === 'win32') {
       // Windows 11 24H2 menghapus wmic, jadi kita gunakan PowerShell untuk presisi
       // Hanya kill Chrome yang CommandLine-nya mengandung 'wwebjs_auth'
-      // [PERF] exec (async) menggantikan execSync — PowerShell WMI tidak lagi blocking
+      // [PERF] exec (async) menggantikan execSync - PowerShell WMI tidak lagi blocking
       exec(
         `powershell -NoProfile -Command "Get-WmiObject Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -match 'wwebjs_auth' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`,
         { timeout: 8000 },
@@ -111,7 +111,7 @@ async function killStaleWWebChrome() {
         }
       );
     } else {
-      resolve(); // Platform tidak dikenal — lewati
+      resolve(); // Platform tidak dikenal - lewati
     }
   });
 }
@@ -120,21 +120,21 @@ async function killStaleWWebChrome() {
  * Inisialisasi WhatsApp Client
  */
 async function initWhatsApp() {
-  // ── Guard: Cegah double-init ──────────────────────────────────────────────
+  // -- Guard: Cegah double-init ----------------------------------------------
   if (isInitializing) {
-    logger.warn(' [WhatsApp] Inisialisasi sudah berjalan — request ini diabaikan.');
+    logger.warn(' [WhatsApp] Inisialisasi sudah berjalan - request ini diabaikan.');
     return;
   }
   isInitializing = true;
 
-  // ── Cleanup client lama ───────────────────────────────────────────────────
+  // -- Cleanup client lama ---------------------------------------------------
   if (waClient) {
     logger.info(' [WhatsApp] Menutup client lama sebelum inisialisasi ulang...');
     try { await waClient.destroy(); } catch (_) { }
     waClient = null;
   }
 
-  // ── [FIX-3] Kill Chrome Puppeteer sesi sebelumnya (TARGETED, bukan global) ─
+  // -- [FIX-3] Kill Chrome Puppeteer sesi sebelumnya (TARGETED, bukan global) -
   // Kill berdasarkan PID tersimpan terlebih dahulu (paling presisi)
   if (chromePid) {
     await killChromeByPid(chromePid);
@@ -144,12 +144,12 @@ async function initWhatsApp() {
   await killStaleWWebChrome();
 
   // Beri jeda singkat agar OS selesai membebaskan file lock
-  // [PERF] Dikurangi dari 500ms → 200ms; exec async di atas sudah selesai saat baris ini dicapai
+  // [PERF] Dikurangi dari 500ms -> 200ms; exec async di atas sudah selesai saat baris ini dicapai
   await new Promise(r => setTimeout(r, 200));
 
   let executablePath;
 
-  // ── Deteksi Browser Lintas Platform ──────────────────────────────────────
+  // -- Deteksi Browser Lintas Platform --------------------------------------
   const platform = os.platform();
   const localBrowsers = platform === 'darwin'
     ? [
@@ -200,7 +200,7 @@ async function initWhatsApp() {
   const isLinux = platform === 'linux';
 
   const puppeteerArgs = [
-    // ── Cross-platform (aman di semua OS) ──
+    // -- Cross-platform (aman di semua OS) --
     '--disable-dev-shm-usage',
     '--disable-gpu',
     '--disable-software-rasterizer',
@@ -231,21 +231,21 @@ async function initWhatsApp() {
     '--disable-logging',
     '--log-level=3',
     '--js-flags=--max-old-space-size=256',
-    // ── Optimasi kecepatan startup ──
+    // -- Optimasi kecepatan startup --
     '--disk-cache-size=67108864',   // 64MB disk cache untuk aset WA Web
     '--media-cache-size=33554432',  // 32MB media cache
-    // ── [FIX-4] Suppress crash recovery dialog agar tidak block startup ──
+    // -- [FIX-4] Suppress crash recovery dialog agar tidak block startup --
     '--disable-session-crashed-bubble',
     // CATATAN: '--blink-settings=imagesEnabled=false' DIHAPUS karena memblokir
     // downloadMedia() saat user mengirim foto. Flag ini mencegah Chromium memuat
     // blob media WhatsApp sehingga msg.downloadMedia() selalu gagal dengan error "r".
-    // ── Linux only ──────────────────────────────────────────────────────────
+    // -- Linux only ----------------------------------------------------------
     ...(isLinux ? [
       '--no-sandbox',              // Wajib di Linux tanpa setuid sandbox
       '--disable-setuid-sandbox',  // Hanya relevan di Linux
       '--no-zygote',               // Stabil di Linux headless, tidak dipakai di macOS/Windows
     ] : []),
-    // ── macOS only ──────────────────────────────────────────────────────────
+    // -- macOS only ----------------------------------------------------------
     ...(platform === 'darwin' ? [
       '--no-sandbox',              // Diperlukan di beberapa macOS CI environment
     ] : [])
@@ -259,11 +259,11 @@ async function initWhatsApp() {
   };
 
   if (isWindows) {
-    logger.info(' [WhatsApp] Platform Windows terdeteksi — menggunakan konfigurasi Puppeteer yang kompatibel');
+    logger.info(' [WhatsApp] Platform Windows terdeteksi - menggunakan konfigurasi Puppeteer yang kompatibel');
   } else if (isLinux) {
-    logger.info(' [WhatsApp] Platform Linux terdeteksi — menggunakan konfigurasi Puppeteer Linux');
+    logger.info(' [WhatsApp] Platform Linux terdeteksi - menggunakan konfigurasi Puppeteer Linux');
   } else {
-    logger.info(' [WhatsApp] Platform macOS terdeteksi — menggunakan konfigurasi Puppeteer macOS');
+    logger.info(' [WhatsApp] Platform macOS terdeteksi - menggunakan konfigurasi Puppeteer macOS');
   }
 
   if (executablePath) {
@@ -272,7 +272,7 @@ async function initWhatsApp() {
     logger.warn(' [WhatsApp] Tidak menemukan path browser eksplisit. Mengandalkan auto-detect dari Puppeteer.');
   }
 
-  // ── webVersion dari env var ─────────────────────────────────────────────
+  // -- webVersion dari env var ---------------------------------------------
   const waWebVersion = process.env.WA_WEB_VERSION || null;
 
   const clientConfig = {
@@ -301,22 +301,22 @@ async function initWhatsApp() {
 
   waClient = new Client(clientConfig);
 
-  // ── Blokir Image / CSS / Font via Puppeteer Request Interception ─────────
+  // -- Blokir Image / CSS / Font via Puppeteer Request Interception ---------
   // (DIHAPUS: Request interception di Puppeteer dapat mengganggu Service Worker
   // WhatsApp Web dan menyebabkan error "r" saat memanggil downloadMedia())
 
 
-  // ─── Event: QR Code ───────────────────────────────────────────────────────
+  // --- Event: QR Code -------------------------------------------------------
   waClient.on('qr', (qr) => {
     logger.info('\n [WhatsApp] Scan QR Code berikut di WhatsApp Anda:\n');
     qrcode.generate(qr, { small: true });
     logger.info('\n');
   });
 
-  // ─── Event: Ready ─────────────────────────────────────────────────────────
+  // --- Event: Ready ---------------------------------------------------------
   // Simpan timestamp saat bot pertama kali siap.
   // Semua pesan yang dikirim SEBELUM timestamp ini adalah pesan offline/pending
-  // yang masuk saat bot tidak aktif — harus diabaikan agar bot tidak membalas
+  // yang masuk saat bot tidak aktif - harus diabaikan agar bot tidak membalas
   // chat lama secara tiba-tiba setelah restart.
   let botReadyAt = Math.floor(Date.now() / 1000); // Unix timestamp (detik)
 
@@ -333,22 +333,22 @@ async function initWhatsApp() {
         chromePid = pid;
         logger.info(` [WhatsApp] Chrome PID tersimpan: ${chromePid}`);
       }
-    } catch (_) { /* pupBrowser belum tersedia — abaikan */ }
+    } catch (_) { /* pupBrowser belum tersedia - abaikan */ }
 
     reconnectAttempts = 0;
   });
 
-  // ─── Event: Authenticated ──────────────────────────────────────────────────
+  // --- Event: Authenticated --------------------------------------------------
   waClient.on('authenticated', () => {
-    logger.info(' [WhatsApp] Autentikasi berhasil — session tersimpan');
+    logger.info(' [WhatsApp] Autentikasi berhasil - session tersimpan');
   });
 
-  // ─── Event: Auth Failure ──────────────────────────────────────────────────
+  // --- Event: Auth Failure --------------------------------------------------
   waClient.on('auth_failure', (msg) => {
     logger.error(` [WhatsApp] Autentikasi gagal: ${msg}`);
   });
 
-  // ─── Event: Disconnected ──────────────────────────────────────────────────
+  // --- Event: Disconnected --------------------------------------------------
   waClient.on('disconnected', (reason) => {
     logger.info(` [WhatsApp] Terputus: ${reason}`);
     waClient = null;
@@ -372,12 +372,12 @@ async function initWhatsApp() {
     }, delay);
   });
 
-  // ─── Dedup stiker: cegah double-reply jika muncul di kedua event ─────────
+  // --- Dedup stiker: cegah double-reply jika muncul di kedua event ---------
   // Stiker bisa muncul di KEDUA event ('message' dan 'message_create') sekaligus.
   // Set ini menyimpan ID stiker yang sudah diproses selama 5 detik terakhir.
   const _stickerProcessed = new Set();
 
-  // ─── Helper: Kirim balasan stiker (dengan retry + dedup) ─────────────────
+  // --- Helper: Kirim balasan stiker (dengan retry + dedup) -----------------
   async function handleStickerReply(msg) {
     const senderFrom = msg.from || '';
     if (senderFrom.includes('@g.us') || senderFrom === 'status@broadcast' || msg.fromMe) return;
@@ -386,7 +386,7 @@ async function initWhatsApp() {
     // Deduplication: skip jika ID yang sama sudah diproses dalam ~5 detik
     const dedupKey = msg.id?.id || `${senderFrom}_${msg.timestamp}`;
     if (_stickerProcessed.has(dedupKey)) {
-      logger.info(`[WhatsApp] Stiker ${dedupKey} sudah diproses — skip duplikat.`);
+      logger.info(`[WhatsApp] Stiker ${dedupKey} sudah diproses - skip duplikat.`);
       return;
     }
     _stickerProcessed.add(dedupKey);
@@ -425,15 +425,15 @@ async function initWhatsApp() {
       logger.info(`[WhatsApp] Stiker dari ${waNumSticker} dibalas (lastText: ${!!lastText}).`);
     } catch (err) {
       const errMsg = (err && err.message) ? err.message : String(err);
-      // Error "r" atau <=2 karakter = transient WA internal — retry sekali
+      // Error "r" atau <=2 karakter = transient WA internal - retry sekali
       if (errMsg.length <= 2) {
-        logger.warn(`[WhatsApp] Stiker: WA error "${errMsg}" ke ${waNumSticker} — retry 2 detik...`);
+        logger.warn(`[WhatsApp] Stiker: WA error "${errMsg}" ke ${waNumSticker} - retry 2 detik...`);
         await new Promise(r => setTimeout(r, 2000));
         try {
           await doSend();
-          logger.info(`[WhatsApp] Stiker dari ${waNumSticker} — retry berhasil.`);
+          logger.info(`[WhatsApp] Stiker dari ${waNumSticker} - retry berhasil.`);
         } catch (err2) {
-          logger.error(`[WhatsApp] Stiker dari ${waNumSticker} — retry juga gagal: ${err2.message}`);
+          logger.error(`[WhatsApp] Stiker dari ${waNumSticker} - retry juga gagal: ${err2.message}`);
         }
       } else {
         logger.warn(`[WhatsApp] Gagal balas stiker dari ${waNumSticker}: ${errMsg}`);
@@ -441,7 +441,7 @@ async function initWhatsApp() {
     }
   }
 
-  // ─── Fallback Stiker via message_create ──────────────────────────────────
+  // --- Fallback Stiker via message_create ----------------------------------
   // Di beberapa versi whatsapp-web.js, stiker hanya muncul di 'message_create'.
   waClient.on('message_create', async (msg) => {
     if (msg.fromMe) return;
@@ -454,7 +454,7 @@ async function initWhatsApp() {
   });
 
 
-  // ─── Sistem Antrean Pesan (Anti-DDoS / Spam Protection) ───────────────────
+  // --- Sistem Antrean Pesan (Anti-DDoS / Spam Protection) -------------------
   class MessageQueue {
     constructor(concurrency = 5, delayMs = 1000, maxLength = 200) {
       this.concurrency = concurrency;
@@ -492,7 +492,7 @@ async function initWhatsApp() {
   }
   const botQueue = new MessageQueue(5, 1000, 200);
 
-  // ─── Event: Pesan Masuk ───────────────────────────────────────────────────
+  // --- Event: Pesan Masuk ---------------------------------------------------
   // Catatan: event 'message' hanya menerima pesan MASUK (dari pengguna ke bot),
   // sehingga tidak perlu logika rumit untuk menghindari loop.
   waClient.on('message', async (rawMsg) => {
@@ -502,10 +502,10 @@ async function initWhatsApp() {
       return;
     }
 
-    // ─── Guard: Abaikan pesan offline (dikirim saat bot tidak aktif) ───────
+    // --- Guard: Abaikan pesan offline (dikirim saat bot tidak aktif) -------
     // whatsapp-web.js me-replay semua pesan pending saat reconnect.
     // Pesan yang timestamp-nya lebih tua dari botReadyAt adalah pesan offline
-    // — diabaikan agar bot tidak membalas chat lama secara tiba-tiba.
+    // - diabaikan agar bot tidak membalas chat lama secara tiba-tiba.
     const msgTimestamp = msg.timestamp || 0; // Unix timestamp dalam detik
     if (msgTimestamp > 0 && msgTimestamp < botReadyAt) {
       logger.warn(
@@ -525,19 +525,19 @@ async function initWhatsApp() {
       waNumber = msg.from.replace(/@.*$/, '');
     }
 
-    // ─── F4: Whitelist Nomor WA (Dicek Paling Awal) ────────────────────────
+    // --- F4: Whitelist Nomor WA (Dicek Paling Awal) ------------------------
     const whitelistEnv = process.env.WA_WHITELIST || '';
     if (whitelistEnv) {
       const whitelist = whitelistEnv.split(',').map(n => n.trim()).filter(Boolean);
       if (whitelist.length > 0 && !whitelist.includes(waNumber)) {
-        logger.warn(`[WhatsApp] Nomor tidak diizinkan (bukan whitelist): ${waNumber} — pesan diabaikan`);
+        logger.warn(`[WhatsApp] Nomor tidak diizinkan (bukan whitelist): ${waNumber} - pesan diabaikan`);
         return;
       }
     }
 
     // Membungkus seluruh logika pemrosesan chat ke dalam keranjang antrean (Maksimal 5)
     botQueue.add(async () => {
-      // ── Stiker: tangkap SEBELUM cek hasMedia (hasMedia bisa false di beberapa versi) ──
+      // -- Stiker: tangkap SEBELUM cek hasMedia (hasMedia bisa false di beberapa versi) --
       if (msg.type === 'sticker') {
         await handleStickerReply(msg);
         return;
@@ -561,23 +561,23 @@ async function initWhatsApp() {
       // Jika tidak ada teks dan tidak ada media, abaikan
       if (!msgText && !msg.hasMedia) return;
 
-    // ─── Kirim ke Message Handler ──────────────────────────────────────────
+    // --- Kirim ke Message Handler ------------------------------------------
     // Teruskan `msg` sebagai parameter ke-4 agar handler bisa mengunduh attachment jika perlu.
     await handleMessage(waNumber, msgText, async (replyText, mediaPath = null) => {
       // Simpan pesan balasan terakhir bot (digunakan saat stiker masuk)
       if (replyText) lastTextByNumber.set(waNumber, replyText);
 
-      // ── Typing indicator (tidak kritis — error-nya tidak boleh abort pengiriman) ──
+      // -- Typing indicator (tidak kritis - error-nya tidak boleh abort pengiriman) --
       try {
         const chat = await msg.getChat();
         await chat.sendStateTyping();
-      } catch (_) { /* typing indicator gagal — lanjut kirim pesan */ }
+      } catch (_) { /* typing indicator gagal - lanjut kirim pesan */ }
 
       await new Promise(r => setTimeout(r, 800 + Math.random() * 1700));
 
-      // ── Helper: kirim pesan via sendMessage (lebih stabil dari msg.reply) ──────
+      // -- Helper: kirim pesan via sendMessage (lebih stabil dari msg.reply) ------
       // Tidak menggunakan msg.reply() karena WA Web internal JS yang di-minify
-      // sering melempar string "r" saat quote-message gagal — sulit di-debug.
+      // sering melempar string "r" saat quote-message gagal - sulit di-debug.
       const doSend = async () => {
         if (!waClient) throw new Error('waClient belum siap');
         if (mediaPath) {
@@ -588,8 +588,8 @@ async function initWhatsApp() {
         }
       };
 
-      // ── Kirim dengan 1x retry untuk error transient WA internal ("r", dll) ────
-      // Error ≤2 karakter adalah artefak minifikasi WA Web JS — hampir selalu
+      // -- Kirim dengan 1x retry untuk error transient WA internal ("r", dll) ----
+      // Error 2 karakter adalah artefak minifikasi WA Web JS - hampir selalu
       // transient dan berhasil di percobaan kedua setelah jeda singkat.
       try {
         await doSend();
@@ -598,19 +598,19 @@ async function initWhatsApp() {
           ? err.message : String(err);
 
         if (errMsg.length <= 2) {
-          // Transient WA internal error — tunggu 2 detik lalu coba sekali lagi
-          logger.warn(`[WhatsApp] WA internal error ("${errMsg}") ke ${waNumber} — retry dalam 2 detik...`);
+          // Transient WA internal error - tunggu 2 detik lalu coba sekali lagi
+          logger.warn(`[WhatsApp] WA internal error ("${errMsg}") ke ${waNumber} - retry dalam 2 detik...`);
           await new Promise(r => setTimeout(r, 2000));
           try {
             await doSend();
-            logger.info(`[WhatsApp] Retry berhasil — pesan terkirim ke ${waNumber}`);
+            logger.info(`[WhatsApp] Retry berhasil - pesan terkirim ke ${waNumber}`);
           } catch (err2) {
             const err2Msg = (err2 && typeof err2 === 'object' && err2.message)
               ? err2.message : String(err2);
             logger.error(`[WhatsApp] Retry juga gagal ke ${waNumber}: "${err2Msg}"`);
           }
         } else {
-          // Error bermakna (bukan minifikasi) — langsung log sebagai error
+          // Error bermakna (bukan minifikasi) - langsung log sebagai error
           logger.error(`[WhatsApp] Gagal mengirim balasan ke ${waNumber}: "${errMsg}"`);
         }
       }
@@ -618,7 +618,7 @@ async function initWhatsApp() {
     }); // Penutup botQueue.add
   });
 
-  // ─── Inisialisasi Client ─────────────────────────────────────────────────
+  // --- Inisialisasi Client -------------------------------------------------
   // [FIX-1] Timeout 120 detik via Promise.race
   // [FIX-2] destroy() dipanggil saat init gagal agar Chrome tidak zombie
   // [WATCHDOG] Jika Chrome zombie memblokir Promise.race, watchdog paksa kill setelah 135 detik
@@ -626,7 +626,7 @@ async function initWhatsApp() {
 
   // Watchdog timer: jalan paralel, matikan Chrome secara paksa jika timeout JS tidak bekerja
   const watchdogTimer = setTimeout(async () => {
-    logger.error(' [WhatsApp] ⚠ WATCHDOG: Inisialisasi melebihi batas waktu — Chrome zombie terdeteksi. Memaksa kill...');
+    logger.error(' [WhatsApp] [PERINGATAN] WATCHDOG: Inisialisasi melebihi batas waktu - Chrome zombie terdeteksi. Memaksa kill...');
     const pidToForceKill = chromePid;
     waClient = null;
     chromePid = null;
@@ -644,7 +644,7 @@ async function initWhatsApp() {
       )
     );
     await Promise.race([waClient.initialize(), initTimeout]);
-    // Inisialisasi berhasil — batalkan watchdog
+    // Inisialisasi berhasil - batalkan watchdog
     clearTimeout(watchdogTimer);
 
   } catch (err) {
@@ -659,13 +659,13 @@ async function initWhatsApp() {
     chromePid = null;
 
     if (clientToDestroy) {
-      // Destroy secara async (non-blocking) — initialize() mungkin masih pending
+      // Destroy secara async (non-blocking) - initialize() mungkin masih pending
       setImmediate(async () => {
         try {
           await clientToDestroy.destroy();
           logger.info(' [WhatsApp] Chrome Puppeteer dihentikan setelah init gagal.');
         } catch (_) {
-          // destroy() gagal — kill secara paksa berdasarkan PID atau session path
+          // destroy() gagal - kill secara paksa berdasarkan PID atau session path
           if (pidToKill) await killChromeByPid(pidToKill);
           else await killStaleWWebChrome();
         }
@@ -720,7 +720,7 @@ async function getWhatsAppStatus() {
 async function closeWhatsApp() {
   logger.info(' [WhatsApp] Menutup client WhatsApp...');
 
-  // ── Langkah 1: Kill Chrome via PowerShell DULU ──────────────────────────
+  // -- Langkah 1: Kill Chrome via PowerShell DULU --------------------------
   // Ini harus dilakukan SEBELUM destroy() agar Puppeteer tidak sempat
   // menjalankan taskkill internalnya (yang mencetak ERROR ke console).
   // Setelah Chrome dimatikan, destroy() akan menemukan browser sudah tidak
@@ -731,13 +731,13 @@ async function closeWhatsApp() {
   }
   await killStaleWWebChrome();
 
-  // ── Langkah 2: destroy() sebagai cleanup — Chrome sudah tidak ada ───────
+  // -- Langkah 2: destroy() sebagai cleanup - Chrome sudah tidak ada -------
   if (waClient) {
     try {
       await waClient.destroy();
       logger.info(' [WhatsApp] Client berhasil ditutup.');
     } catch (_) {
-      // Error expected — Chrome sudah dimatikan di atas, destroy() akan gagal konek ke CDP
+      // Error expected - Chrome sudah dimatikan di atas, destroy() akan gagal konek ke CDP
       logger.info(' [WhatsApp] Client ditutup (Chrome sudah dihentikan lebih dahulu).');
     } finally {
       waClient = null;
@@ -771,7 +771,7 @@ async function sendMessageToNumber(waNumber, message) {
   } catch (err) {
     logger.error(`[WhatsApp] Gagal kirim balasan ke ${waNumber}: ${err.message}`);
 
-    // ── Deteksi error konteks browser Puppeteer yang rusak ───────────────────
+    // -- Deteksi error konteks browser Puppeteer yang rusak -------------------
     // Error-error ini terjadi ketika halaman WhatsApp Web di Puppeteer sudah
     // tidak valid (page reload, context destroyed, dll) meski state masih CONNECTED.
     // Solusi: trigger auto-restart WA agar koneksi browser diperbaiki.
@@ -787,13 +787,13 @@ async function sendMessageToNumber(waNumber, message) {
     const isBrowserContextBroken = BROWSER_CONTEXT_ERRORS.some(e => err.message.includes(e));
     if (isBrowserContextBroken && !isInitializing) {
       logger.warn(
-        `[WhatsApp] ⚠ Konteks browser WhatsApp rusak ("${err.message.substring(0, 60)}") — ` +
+        `[WhatsApp] [PERINGATAN] Konteks browser WhatsApp rusak ("${err.message.substring(0, 60)}") - ` +
         `memulai restart otomatis dalam 3 detik...`
       );
       setTimeout(async () => {
         try {
           await restartWhatsApp();
-          logger.info('[WhatsApp] ✓ Auto-restart setelah browser context error selesai.');
+          logger.info('[WhatsApp]  Auto-restart setelah browser context error selesai.');
         } catch (restartErr) {
           logger.error(`[WhatsApp] Auto-restart gagal: ${restartErr.message}`);
         }
@@ -818,36 +818,42 @@ async function sendMediaToNumber(waNumber, base64Data, mimeType, filename, capti
 
     const chatId = waNumber.includes('@c.us') ? waNumber : `${waNumber}@c.us`;
 
-    // Tentukan ekstensi dari mimeType atau filename agar WA bisa mengenali jenis media
-    let ext = '.jpg';
-    if (mimeType === 'image/png') ext = '.png';
-    else if (mimeType === 'image/gif') ext = '.gif';
-    else if (mimeType === 'image/webp') ext = '.webp';
-    else if (filename) {
-      const fnExt = path.extname(filename).toLowerCase();
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fnExt)) ext = fnExt;
+    // Dapatkan chat object dulu - cara yang sama dengan sendMessageToNumber yang sudah bekerja
+    const chat = await waClient.getChatById(chatId);
+    if (!chat) {
+      return { success: false, error: `Chat tidak ditemukan untuk ${waNumber}` };
     }
 
-    // Simpan ke file temporer agar MessageMedia.fromFilePath() bisa mendeteksi mime secara benar
-    // Ini menghindari error "id property undefined" pada WA Web internal saat menggunakan
-    // konstruksi new MessageMedia(mime, base64) dengan mime non-standard seperti application/x-download
+    // Tentukan ekstensi dari filename atau mimeType agar WA bisa mengenali jenis media
+    let ext = '.jpg';
+    if (filename) {
+      const fnExt = path.extname(filename).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(fnExt)) ext = fnExt;
+    } else if (mimeType === 'image/png') ext = '.png';
+    else if (mimeType === 'image/gif') ext = '.gif';
+    else if (mimeType === 'image/webp') ext = '.webp';
+
+    // Tulis ke file temp agar fromFilePath() mendeteksi mime otomatis dari ekstensi
     tmpPath = path.join(os.tmpdir(), `wa_lampiran_${Date.now()}${ext}`);
     fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
 
     const media = MessageMedia.fromFilePath(tmpPath);
-    await waClient.sendMessage(chatId, media, { caption });
 
-    logger.info(`[WhatsApp] Lampiran media terkirim ke ${waNumber} (${Math.round(Buffer.from(base64Data, 'base64').length / 1024)}KB)`);
+    // Kirim via chat.sendMessage() - lebih stabil dari waClient.sendMessage()
+    await chat.sendMessage(media, { caption });
+
+    const sizeKb = Math.round(fs.statSync(tmpPath).size / 1024);
+    logger.info(`[WhatsApp] Lampiran media terkirim ke ${waNumber} (${sizeKb}KB)`);
     return { success: true };
   } catch (err) {
     logger.error(`[WhatsApp] Gagal kirim media ke ${waNumber}: ${err.message}`);
     return { success: false, error: err.message };
   } finally {
-    // Hapus file temporer setelah selesai (berhasil atau gagal)
     if (tmpPath && fs.existsSync(tmpPath)) {
       try { fs.unlinkSync(tmpPath); } catch (_) { /* abaikan error cleanup */ }
     }
   }
 }
+
 
 module.exports = { initWhatsApp, getWhatsAppStatus, closeWhatsApp, restartWhatsApp, sendMessageToNumber, sendMediaToNumber };

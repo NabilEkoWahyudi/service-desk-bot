@@ -1,31 +1,31 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * NOTIFICATION SERVICE — IT Service Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * NOTIFICATION SERVICE - IT Service Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Dua mekanisme penerimaan balasan (tanpa/minimal delay):
  *
- *   1. WEBHOOK — zero delay (direkomendasikan)
- *      ManageEngine → POST /webhook/me-notification → bot → WA pegawai
- *      Konfigurasi di ManageEngine: Admin → Business Rules → tambah Action
+ *   1. WEBHOOK - zero delay (direkomendasikan)
+ *      ManageEngine -> POST /webhook/me-notification -> bot -> WA pegawai
+ *      Konfigurasi di ManageEngine: Admin -> Business Rules -> tambah Action
  *      "HTTP Notification" dengan URL: http://<ip-server>:3000/webhook/me-notification
  *      Body JSON: { "request_id": "${requestId}" }
  *
- *   2. ADAPTIVE POLLING — backup otomatis jika webhook tidak dikonfigurasi
+ *   2. ADAPTIVE POLLING - backup otomatis jika webhook tidak dikonfigurasi
  *      Master timer 5 detik mengecek tiket mana yang sudah waktunya dipoll.
  *      Interval per tiket adaptif berdasarkan umur tiket:
- *        0–5  menit  → setiap 15 detik  (maks delay 15 detik)
- *        5–30 menit  → setiap 30 detik  (maks delay 30 detik)
- *        30min–7hari → setiap 60 detik  (maks delay 60 detik)
+ *        0-5  menit  -> setiap 15 detik  (maks delay 15 detik)
+ *        5-30 menit  -> setiap 30 detik  (maks delay 30 detik)
+ *        30min-7hari -> setiap 60 detik  (maks delay 60 detik)
  *      Poll PERTAMA dilakukan 5 detik setelah tiket didaftarkan.
  *
  * Routing notifikasi berdasarkan field "type" dari ManageEngine:
- *   type = "approval"             → kirim ke WA ATASAN  (permintaan APPROVE/REJECT)
- *   type = "system_notification"  → kirim ke WA PEGAWAI (status disetujui/ditolak)
- *   type lainnya                  → kirim ke WA PEGAWAI (default)
+ *   type = "approval"             -> kirim ke WA ATASAN  (permintaan APPROVE/REJECT)
+ *   type = "system_notification"  -> kirim ke WA PEGAWAI (status disetujui/ditolak)
+ *   type lainnya                  -> kirim ke WA PEGAWAI (default)
  *
  * Routing: berdasarkan Request ID tiket (bukan WA number).
- * Satu WA number bisa punya banyak tiket aktif — masing-masing independen.
+ * Satu WA number bisa punya banyak tiket aktif - masing-masing independen.
  */
 
 'use strict';
@@ -34,15 +34,15 @@ const path           = require('path');
 const logger         = require('../utils/logger');
 const encryptedStore = require('../utils/encrypted-store');
 
-// ─── Konfigurasi ─────────────────────────────────────────────────────────────
+// --- Konfigurasi -------------------------------------------------------------
 
 /**
- * Interval polling flat untuk semua tiket — tanpa memandang umur tiket.
+ * Interval polling flat untuk semua tiket - tanpa memandang umur tiket.
  * Semua tiket aktif di-poll setiap POLL_INTERVAL_MS agar reply admin
  * langsung muncul di chatbot (real-time, maks delay = POLL_INTERVAL_MS).
  *
  * Bisa di-override via env var NOTIF_POLL_INTERVAL_MS (dalam milidetik).
- * Contoh: NOTIF_POLL_INTERVAL_MS=10000 → tiap 10 detik.
+ * Contoh: NOTIF_POLL_INTERVAL_MS=10000 -> tiap 10 detik.
  */
 const POLL_INTERVAL_MS = parseInt(process.env.NOTIF_POLL_INTERVAL_MS || '15000', 10);
 
@@ -51,7 +51,7 @@ const MASTER_TICK_MS = 5_000;
 
 /**
  * Delay sebelum poll pertama setelah tiket didaftarkan.
- * Default: 5 detik — cukup cepat tanpa mengganggu proses pembuatan tiket.
+ * Default: 5 detik - cukup cepat tanpa mengganggu proses pembuatan tiket.
  */
 const INITIAL_POLL_DELAY_MS = parseInt(process.env.NOTIF_INITIAL_POLL_DELAY_MS || '5000', 10);
 
@@ -61,7 +61,7 @@ const MAX_TRACK_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 /** File persisten untuk menyimpan daftar tiket yang sedang di-track. */
 const NOTIF_DATA_FILE = path.join(__dirname, '../../data/notifications.json');
 
-// ─── In-Memory Store ──────────────────────────────────────────────────────────
+// --- In-Memory Store ----------------------------------------------------------
 /**
  * Map<requestId, { waNumber, supervisorWa, supervisorMeId, seenIds, registeredAt, lastCheckedAt }>
  *   supervisorWa   : nomor WA atasan yang sudah dinormalisasi (628xxx), atau null
@@ -70,7 +70,7 @@ const NOTIF_DATA_FILE = path.join(__dirname, '../../data/notifications.json');
  */
 const trackedTickets = new Map();
 
-// ─── Persistence ─────────────────────────────────────────────────────────────
+// --- Persistence -------------------------------------------------------------
 
 function loadTrackedTickets() {
   try {
@@ -95,7 +95,7 @@ function loadTrackedTickets() {
 
     if (loaded > 0) {
       logger.info(
-        `[Notif] ${loaded} tiket dimuat dari disk — semua dijadwalkan poll segera (lastCheckedAt direset)` +
+        `[Notif] ${loaded} tiket dimuat dari disk - semua dijadwalkan poll segera (lastCheckedAt direset)` +
         (encryptedStore.ENCRYPTION_ENABLED ? ' [terenkripsi]' : ' [plain JSON]') + '.'
       );
     }
@@ -125,7 +125,7 @@ function saveTrackedTickets() {
   }, 500);
 }
 
-// ─── Interval Check ───────────────────────────────────────────────────────────
+// --- Interval Check -----------------------------------------------------------
 
 /**
  * Cek apakah tiket sudah waktunya di-poll berdasarkan POLL_INTERVAL_MS.
@@ -151,7 +151,7 @@ function isTicketDue(lastCheckedAt) {
  * Format pesan permintaan approval ke ATASAN (notif type = "approval").
  *
  * Menggunakan data dari approvalItem (pendingApprovals store) sebagai sumber utama.
- * Hanya menampilkan baris yang ada nilainya — baris kosong tidak ditampilkan.
+ * Hanya menampilkan baris yang ada nilainya - baris kosong tidak ditampilkan.
  *
  * @param {string} requestId
  * @param {string} ticketDescription - Tidak digunakan lagi (kept for signature compatibility)
@@ -169,7 +169,7 @@ function buildApprovalRequestMsg(requestId, ticketDescription, approvalItem) {
   const unitBidang   = sd.department || approvalItem?.department || '';
   const jabatan      = sd.jobTitle || approvalItem?.jabatan || '';
 
-  // Bangun baris data — format *Label* : value (mobile-friendly, tanpa padding)
+  // Bangun baris data - format *Label* : value (mobile-friendly, tanpa padding)
   const lines = [];
   if (namaAplikasi) lines.push(`*Nama Aplikasi* : ${namaAplikasi}`);
   if (nip)          lines.push(`*Nomor Induk Pegawai* : ${nip}`);
@@ -180,12 +180,12 @@ function buildApprovalRequestMsg(requestId, ticketDescription, approvalItem) {
   lines.push(       `*No. Tiket* : ${requestId}`);
 
   return (
-    `*[IT Service Desk PLN Batam — Permintaan Persetujuan]*\n\n` +
+    `*[IT Service Desk PLN Batam - Permintaan Persetujuan]*\n\n` +
     ` Terdapat permintaan *Pembuatan atau Perubahan Otorisasi Aplikasi* yang memerlukan persetujuan Anda:\n\n` +
     lines.join('\n') +
     `\n\nBalas dengan:\n` +
-    ` *APPROVE* — untuk menyetujui\n` +
-    ` *REJECT*  — untuk menolak\n\n` +
+    ` *APPROVE* - untuk menyetujui\n` +
+    ` *REJECT*  - untuk menolak\n\n` +
     `_Pesan ini dikirim otomatis oleh IT Service Desk Bot PLN Batam_`
   );
 }
@@ -208,7 +208,7 @@ function buildSystemNotifMsg(requestId, notif, ticketDesc, staffData = null) {
 
   const ticketSubject = notif.request?.subject || notif.subject || '';
 
-  // Bangun baris data — format *Label* : value (mobile-friendly, tanpa padding)
+  // Bangun baris data - format *Label* : value (mobile-friendly, tanpa padding)
   const sd    = staffData || {};
   const lines = [];
   if (sd.name || '')         lines.push(`*Nama Pegawai* : ${sd.name}`);
@@ -282,7 +282,7 @@ function formatNotificationMessage(requestId, notif, ticketDesc, staffData = nul
   const subject       = notif.subject        || notif.request?.subject || '-';
   const ticketSubject = notif.request?.subject || subject;
 
-  // ── Sumber data user: staffData (dari session/API) — paling akurat ─────────
+  // -- Sumber data user: staffData (dari session/API) - paling akurat ---------
   // Jika staffData tersedia, gunakan langsung tanpa parsing HTML deskripsi.
   // Ini menghindari masalah regex menangkap nilai yang salah dari template form.
   let namaAplikasi = '', nip = '', namaLengkap = '', userAccount = '', jabatan = '';
@@ -302,7 +302,7 @@ function formatNotificationMessage(requestId, notif, ticketDesc, staffData = nul
       .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
       .replace(/&#39;/gi, "'").replace(/\n{3,}/g, '\n\n').trim();
 
-    // Ambil hanya baris yang berformat "Label : Nilai" sederhana — lewati baris yang masih mengandung "*"
+    // Ambil hanya baris yang berformat "Label : Nilai" sederhana - lewati baris yang masih mengandung "*"
     // (baris template form seperti "Nama Aplikasi * :" harus diabaikan)
     const cleanLines = plainDescBody.split('\n').filter(l => !l.includes('*') && l.includes(':'));
     const cleanText  = cleanLines.join('\n');
@@ -313,7 +313,7 @@ function formatNotificationMessage(requestId, notif, ticketDesc, staffData = nul
     jabatan      = extractFieldValue(cleanText, ['Jabatan']) || '';
   }
 
-  // ── Konten balasan dari admin (badan notifikasi) ──────────────────────────
+  // -- Konten balasan dari admin (badan notifikasi) --------------------------
   const rawBody = notif.description || notif.body || notif.content || notif.message || '';
   const plainBody = rawBody
     .replace(/<br\s*\/?>/gi, '\n').replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '')
@@ -333,7 +333,7 @@ function formatNotificationMessage(requestId, notif, ticketDesc, staffData = nul
   const tindakan   = extractFieldValue(plainBody, ['Tindakan', 'Solusi', 'Penyelesaian', 'Resolusi', 'Perbaikan']);
   const vpnInfo    = extractFieldValue(plainBody, ['Alamat VPN', 'Server VPN', 'VPN']);
 
-  // Format *Label* : value — HANYA baris yang ada nilainya (baris kosong tidak ditampilkan)
+  // Format *Label* : value - HANYA baris yang ada nilainya (baris kosong tidak ditampilkan)
   const fieldLines = [];
   if (namaAplikasi) fieldLines.push(`*Nama Aplikasi* : ${namaAplikasi}`);
   if (nip)          fieldLines.push(`*Nomor Induk Pegawai* : ${nip}`);
@@ -373,7 +373,7 @@ function formatNotificationMessage(requestId, notif, ticketDesc, staffData = nul
   return msg;
 }
 
-// ─── Polling Core ─────────────────────────────────────────────────────────────
+// --- Polling Core -------------------------------------------------------------
 
 /**
  * Poll satu tiket secara langsung.
@@ -399,7 +399,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
     if (!isTicketDue(info.lastCheckedAt)) return; // belum waktunya
   }
 
-  // Update lastCheckedAt SEBELUM API call — mencegah race condition jika ticker cepat
+  // Update lastCheckedAt SEBELUM API call - mencegah race condition jika ticker cepat
   info.lastCheckedAt = Date.now();
 
   let getTicketNotifications, sendMessageToNumber, getSupervisorWaByRequestId;
@@ -415,13 +415,13 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
   try {
     const notifications = await getTicketNotifications(requestId);
 
-    // ── Auto-untrack: tiket tidak ditemukan di ManageEngine (404) ─────────────
+    // -- Auto-untrack: tiket tidak ditemukan di ManageEngine (404) -------------
     // Ini terjadi jika tiket sudah dihapus, di-merge, atau ID tidak valid.
     // Hapus dari tracking agar tidak terus-menerus menghasilkan warn log.
     if (notifications && !Array.isArray(notifications) && notifications.notFound === true) {
       trackedTickets.delete(requestId);
       saveTrackedTickets();
-      logger.info(`[Notif] Tiket ${requestId} dihapus dari tracking — tidak ditemukan di ManageEngine (404).`);
+      logger.info(`[Notif] Tiket ${requestId} dihapus dari tracking - tidak ditemukan di ManageEngine (404).`);
       return;
     }
 
@@ -444,11 +444,11 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
 
       if (!notifId || info.seenIds.has(notifId)) continue;
 
-      // ── Routing berdasarkan type notifikasi dari ManageEngine ────────────
+      // -- Routing berdasarkan type notifikasi dari ManageEngine ------------
       //
-      // type = "approval"            → kirim ke WA ATASAN (permintaan APPROVE/REJECT)
-      // type = "system_notification" → kirim ke WA PEGAWAI (status disetujui/ditolak)
-      // type lainnya                 → kirim ke WA PEGAWAI (format default)
+      // type = "approval"            -> kirim ke WA ATASAN (permintaan APPROVE/REJECT)
+      // type = "system_notification" -> kirim ke WA PEGAWAI (status disetujui/ditolak)
+      // type lainnya                 -> kirim ke WA PEGAWAI (format default)
 
       let targetWa, msg;
 
@@ -466,7 +466,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
         ].some(kw => notifBodyRaw.toLowerCase().includes(kw.toLowerCase()));
 
         if (isApprovalEmail) {
-          // Ini email persetujuan yang ditujukan ke atasan — jangan teruskan ke employee
+          // Ini email persetujuan yang ditujukan ke atasan - jangan teruskan ke employee
           info.seenIds.add(notifId);
           anyNew = true;
           logger.info(
@@ -482,7 +482,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
         const approvalLookup = getSupervisorWaByRequestId(requestId);
         if (approvalLookup) {
           logger.info(
-            `[Notif] Notifikasi approval #${notifId} tiket ${requestId} — ` +
+            `[Notif] Notifikasi approval #${notifId} tiket ${requestId} - ` +
             `atasan ${approvalLookup.supervisorWa} sudah terdaftar di pending store, skip duplikasi.`
           );
           info.seenIds.add(notifId);
@@ -490,14 +490,14 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           continue;
         }
 
-        // Ambil nomor WA atasan — utamakan dari cache, fallback ke API jika belum ada
+        // Ambil nomor WA atasan - utamakan dari cache, fallback ke API jika belum ada
         let supervisorWa = info.supervisorWa || null;
 
         if (!supervisorWa) {
           // Fallback: ambil reporting_to.phone/mobile dari GET /api/v3/users/{requesterId}
           // Endpoint individual selalu menyertakan phone di dalam reporting_to
           logger.info(
-            `[Notif] supervisorWa belum tersimpan untuk tiket ${requestId} — ` +
+            `[Notif] supervisorWa belum tersimpan untuk tiket ${requestId} - ` +
             `mencoba ambil dari API (GET /api/v3/users/{requesterId})...`
           );
 
@@ -507,7 +507,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
             getTicketDetailFn = ticketSvc.getTicketDetail;
             getUserByIdFn     = ticketSvc.getUserById;
           } catch (depErr) {
-            logger.warn(`[Notif] Gagal load ticket.service: ${depErr.message} — skip approval WA.`);
+            logger.warn(`[Notif] Gagal load ticket.service: ${depErr.message} - skip approval WA.`);
             info.seenIds.add(notifId);
             anyNew = true;
             continue;
@@ -519,13 +519,13 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
             const requesterId  = ticketDetail?.requester?.id || null;
 
             if (!requesterId) {
-              logger.warn(`[Notif] Tidak bisa dapatkan requester ID tiket ${requestId} — skip approval WA.`);
+              logger.warn(`[Notif] Tidak bisa dapatkan requester ID tiket ${requestId} - skip approval WA.`);
               info.seenIds.add(notifId);
               anyNew = true;
               continue;
             }
 
-            // 2. GET /api/v3/users/{requesterId} → ambil reporting_to.phone / mobile
+            // 2. GET /api/v3/users/{requesterId} -> ambil reporting_to.phone / mobile
             //    Endpoint ini PASTI menyertakan phone di dalam reporting_to (sesuai respons ManageEngine)
             //    Kirim ke reporting_to meskipun reporting_to.id == id user sendiri (self-referential)
             const userDetail = await getUserByIdFn(requesterId);
@@ -534,14 +534,14 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
             if (!rawPhone) {
               logger.warn(
                 `[Notif] Requester ID ${requesterId} tidak punya reporting_to Phone/Mobile ` +
-                `— skip approval WA tiket ${requestId}.`
+                `- skip approval WA tiket ${requestId}.`
               );
               info.seenIds.add(notifId);
               anyNew = true;
               continue;
             }
 
-            // 3. Normalisasi: +628xxx / 628xxx / 08xxx / 8xxx → 628xxx
+            // 3. Normalisasi: +628xxx / 628xxx / 08xxx / 8xxx -> 628xxx
             const cleanPhone = rawPhone.replace(/\D/g, '');
             if (cleanPhone.startsWith('0')) {
               supervisorWa = '62' + cleanPhone.slice(1);
@@ -552,7 +552,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
             }
 
             if (!supervisorWa || supervisorWa.length < 10 || supervisorWa.length > 15) {
-              logger.warn(`[Notif] Nomor WA tidak valid setelah normalisasi: "${supervisorWa}" — skip.`);
+              logger.warn(`[Notif] Nomor WA tidak valid setelah normalisasi: "${supervisorWa}" - skip.`);
               info.seenIds.add(notifId);
               anyNew = true;
               continue;
@@ -569,7 +569,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           } catch (fallbackErr) {
             logger.warn(
               `[Notif] Error saat fallback lookup supervisorWa tiket ${requestId}: ` +
-              `${fallbackErr.message} — skip approval WA.`
+              `${fallbackErr.message} - skip approval WA.`
             );
             info.seenIds.add(notifId);
             anyNew = true;
@@ -578,7 +578,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
         }
 
         logger.info(
-          `[Notif] Notifikasi approval #${notifId} tiket ${requestId} — ` +
+          `[Notif] Notifikasi approval #${notifId} tiket ${requestId} - ` +
           `mengirim permintaan persetujuan ke atasan ${supervisorWa}...`
         );
 
@@ -592,16 +592,16 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           continue;
         }
 
-        // ── Sumber data staf (prioritas): ─────────────────────────────────────
-        // 1. info.staffData — verifiedUser dari session saat tiket dibuat (paling akurat)
-        // 2. Fallback API getUserById — jika bot restart dan staffData hilang dari memory
+        // -- Sumber data staf (prioritas): -------------------------------------
+        // 1. info.staffData - verifiedUser dari session saat tiket dibuat (paling akurat)
+        // 2. Fallback API getUserById - jika bot restart dan staffData hilang dari memory
         // Tidak lagi memakai ekstraksi HTML karena format tabel menyebabkan parse error.
 
         let staffData = info.staffData || null;
 
         if (!staffData) {
           logger.info(
-            `[Notif] staffData kosong untuk tiket ${requestId} (mungkin setelah restart) — ` +
+            `[Notif] staffData kosong untuk tiket ${requestId} (mungkin setelah restart) - ` +
             `mencoba ambil dari ManageEngine API...`
           );
           try {
@@ -663,26 +663,26 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           info.seenIds.add(notifId);
           anyNew = true;
           logger.info(
-            `[Notif] ✓ WA approval terkirim ke atasan ${supervisorWa} untuk tiket ${requestId}`
+            `[Notif]  WA approval terkirim ke atasan ${supervisorWa} untuk tiket ${requestId}`
           );
         } else {
-          // Tidak masuk seenIds → akan dicoba ulang di polling berikutnya
+          // Tidak masuk seenIds -> akan dicoba ulang di polling berikutnya
           logger.warn(
-            `[Notif] ✗ Gagal kirim WA approval ke ${supervisorWa}: ${waResult.error} ` +
-            `— tiket ${requestId} akan dicoba ulang.`
+            `[Notif]  Gagal kirim WA approval ke ${supervisorWa}: ${waResult.error} ` +
+            `- tiket ${requestId} akan dicoba ulang.`
           );
         }
 
         continue;
 
       } else if (notifType === 'system_notification') {
-        // Notifikasi status sistem (has been Approved / Rejected) → ke pegawai
+        // Notifikasi status sistem (has been Approved / Rejected) -> ke pegawai
         targetWa = info.waNumber;
         msg      = buildSystemNotifMsg(requestId, notif, ticketDesc, info.staffData || null);
-        logger.info(`[Notif] Notifikasi system #${notifId} tiket ${requestId} → WA pegawai ${targetWa}`);
+        logger.info(`[Notif] Notifikasi system #${notifId} tiket ${requestId} -> WA pegawai ${targetWa}`);
 
       } else {
-        // Notifikasi lain (balasan admin, dsb) — forward ke pegawai dengan format bersih.
+        // Notifikasi lain (balasan admin, dsb) - forward ke pegawai dengan format bersih.
         // Gunakan staffData dari info (sumber terpercaya) bukan parsing HTML description.
         // Sisipkan appName ke staffData sementara karena formatter memerlukannya.
         const staffDataWithApp = info.staffData
@@ -690,7 +690,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           : (info.appName ? { appName: info.appName } : null);
         targetWa = info.waNumber;
         msg      = formatNotificationMessage(requestId, notif, ticketDesc, staffDataWithApp);
-        logger.info(`[Notif] Notifikasi #${notifId} (type: ${notifType || 'unknown'}) tiket ${requestId} → WA ${targetWa}`);
+        logger.info(`[Notif] Notifikasi #${notifId} (type: ${notifType || 'unknown'}) tiket ${requestId} -> WA ${targetWa}`);
       }
 
       // PENTING: jangan tambahkan ke seenIds sebelum pengiriman WA berhasil.
@@ -699,9 +699,9 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
       if (result.success) {
         info.seenIds.add(notifId);
         anyNew = true;
-        logger.info(`[Notif] ✓ Notifikasi #${notifId} tiket ${requestId} → WA ${targetWa} (type: ${notifType || 'unknown'})`);
+        logger.info(`[Notif]  Notifikasi #${notifId} tiket ${requestId} -> WA ${targetWa} (type: ${notifType || 'unknown'})`);
 
-        // ── TASK 12: Cek attachment tiket dan kirim jika ada foto baru ────────
+        // -- TASK 12: Cek attachment tiket dan kirim jika ada foto baru --------
         // Jika ini balasan admin, cek apakah ada file lampiran di tiket tersebut.
         if (notifType !== 'approval' && notifType !== 'system_notification') {
           try {
@@ -757,15 +757,15 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
                   fileData.data,
                   finalMime,
                   att.name || `lampiran_${att.id}.jpg`,
-                  `📎 Lampiran dari Admin — Tiket #${requestId}`
+                  `[Lampiran] Lampiran dari Admin - Tiket #${requestId}`
                 );
 
                 if (sendResult.success) {
-                  logger.info(`[Notif] ✓ Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
+                  logger.info(`[Notif]  Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
                   info.seenAttachmentIds.add(attIdStr);
                   anyNew = true;
                 } else {
-                  logger.warn(`[Notif] ✗ Gagal mengirim lampiran foto ${attIdStr} ke WA ${targetWa}: ${sendResult.error}`);
+                  logger.warn(`[Notif]  Gagal mengirim lampiran foto ${attIdStr} ke WA ${targetWa}: ${sendResult.error}`);
                 }
               } else {
                 logger.warn(`[Notif] Attachment ${attIdStr} gagal didownload atau data kosong`);
@@ -776,8 +776,8 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           }
         }
       } else {
-        // Tidak masuk seenIds → akan dicoba ulang di polling berikutnya
-        logger.warn(`[Notif] ✗ Gagal kirim notifikasi #${notifId} tiket ${requestId} ke ${targetWa}: ${result.error} — akan dicoba ulang.`);
+        // Tidak masuk seenIds -> akan dicoba ulang di polling berikutnya
+        logger.warn(`[Notif]  Gagal kirim notifikasi #${notifId} tiket ${requestId} ke ${targetWa}: ${result.error} - akan dicoba ulang.`);
       }
     }
 
@@ -814,12 +814,12 @@ async function pollAllTickets() {
   }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// --- Public API ---------------------------------------------------------------
 
 /**
  * Poll tiket SEGERA, mengabaikan interval adaptive.
  * Dipanggil oleh webhook endpoint /webhook/me-notification saat ManageEngine
- * mengirim notifikasi push — menghasilkan zero delay di sisi bot.
+ * mengirim notifikasi push - menghasilkan zero delay di sisi bot.
  *
  * @param {string} requestId - ID tiket dari ManageEngine
  */
@@ -829,7 +829,7 @@ async function pollTicketImmediate(requestId) {
     logger.warn(`[Notif] Webhook untuk tiket ${id} diterima tapi tidak ada di tracking.`);
     return false;
   }
-  logger.info(`[Notif]  Webhook trigger — poll langsung tiket ${id}`);
+  logger.info(`[Notif]  Webhook trigger - poll langsung tiket ${id}`);
   await pollSingleTicket(id, { skipIntervalCheck: true });
   return true;
 }
@@ -851,7 +851,7 @@ async function pollTicketImmediate(requestId) {
 function registerTicket(requestId, waNumber, supervisorWa = null, supervisorMeId = null, verifiedUser = null, appName = null) {
   const id = String(requestId);
   if (trackedTickets.has(id)) {
-    logger.info(`[Notif] Tiket ${id} sudah terdaftar — skip duplikat.`);
+    logger.info(`[Notif] Tiket ${id} sudah terdaftar - skip duplikat.`);
     return;
   }
 
@@ -872,7 +872,7 @@ function registerTicket(requestId, waNumber, supervisorWa = null, supervisorMeId
     `[Notif] Tiket ${id} didaftarkan (WA: ${waNumber}` +
     (supervisorWa   ? `, atasan WA: ${supervisorWa}` : ', atasan WA: belum diketahui') +
     (supervisorMeId ? `, atasan ME ID: ${supervisorMeId}` : '') +
-    `) — poll pertama dalam ${INITIAL_POLL_DELAY_MS / 1000}s`
+    `) - poll pertama dalam ${INITIAL_POLL_DELAY_MS / 1000}s`
   );
 
   // Poll pertama: bypass interval adaptive agar balasan awal langsung terdeteksi
@@ -890,7 +890,7 @@ function registerTicket(requestId, waNumber, supervisorWa = null, supervisorMeId
 function startPolling() {
   loadTrackedTickets();
   logger.info(
-    `[Notif] Polling real-time aktif — master tick: ${MASTER_TICK_MS / 1000}s | ` +
+    `[Notif] Polling real-time aktif - master tick: ${MASTER_TICK_MS / 1000}s | ` +
     `interval per-tiket: ${POLL_INTERVAL_MS / 1000}s (semua umur) | ` +
     `poll pertama: ${INITIAL_POLL_DELAY_MS / 1000}s | ` +
     `max tracking: 7 hari`

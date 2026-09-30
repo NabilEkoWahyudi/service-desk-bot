@@ -1,7 +1,7 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * VALIDATORS & PROMPTS — IT Help Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * VALIDATORS & PROMPTS - IT Help Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Menyediakan tiga fungsi utama:
  *   - buildAllFieldsPrompt() : Buat prompt semua field sekaligus (numbered list)
@@ -67,15 +67,15 @@ function parseNumberedList(text, expectedCount, nullableIndices = new Set()) {
     }
   }
 
-  // Pastikan semua field tersedia — field nullable boleh kosong
+  // Pastikan semua field tersedia - field nullable boleh kosong
   const result = [];
   for (let i = 0; i < expectedCount; i++) {
     const val = entries[i];
     if (!val || !val.trim()) {
       if (nullableIndices.has(i)) {
-        result.push('');   // field opsional — boleh kosong
+        result.push('');   // field opsional - boleh kosong
       } else {
-        return null;       // field wajib — gagal parse
+        return null;       // field wajib - gagal parse
       }
     } else {
       result.push(val.trim());
@@ -110,7 +110,7 @@ function validateField(fieldKey, value) {
     }
   }
 
-  // role_assign, role_hapus, tgl_awal, tgl_akhir bersifat opsional — jika kosong atau "-", selalu valid
+  // role_assign, role_hapus, tgl_awal, tgl_akhir bersifat opsional - jika kosong atau "-", selalu valid
   if (fieldKey === 'role_assign' || fieldKey === 'role_hapus' || fieldKey === 'tgl_awal' || fieldKey === 'tgl_akhir') {
     if (!trimmed || trimmed === '-') return { valid: true };
     if (trimmed.length > 500) {

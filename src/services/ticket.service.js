@@ -1,13 +1,13 @@
 /**
- * ═══════════════════════════════════════════════════════════════
- * TICKET SERVICE — IT Service Desk Bot PLN Batam
- * ═══════════════════════════════════════════════════════════════
+ * ---------------------------------------------------------------
+ * TICKET SERVICE - IT Service Desk Bot PLN Batam
+ * ---------------------------------------------------------------
  *
  * Mengirim request ke ManageEngine ServiceDesk Plus API v3.
  *
  * Alur:
- *   1. POST /api/v3/requests  — buat tiket (body: input_data JSON, x-www-form-urlencoded)
- *   2. GET  /api/v3/requests/:id — ambil detail tiket resmi setelah POST berhasil
+ *   1. POST /api/v3/requests  - buat tiket (body: input_data JSON, x-www-form-urlencoded)
+ *   2. GET  /api/v3/requests/:id - ambil detail tiket resmi setelah POST berhasil
  *
  * Autentikasi : Header TECHNICIAN_KEY
  * Content-Type: application/x-www-form-urlencoded (untuk POST)
@@ -43,7 +43,7 @@ function getLogoSrc() {
 /**
  * Portal ID untuk ManageEngine On-Premise.
  * Wajib disertakan sebagai header PORTALID di setiap API call.
- * Nilai default 'SDP' — sesuaikan di .env jika berbeda.
+ * Nilai default 'SDP' - sesuaikan di .env jika berbeda.
  */
 const PORTAL_ID = process.env.PORTAL_ID || 'SDP';
 
@@ -113,8 +113,8 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
   const userAccount = escapeHtml(verifiedUser?.loginName || data.requester || '');
   const location    = escapeHtml(verifiedUser?.department || '');
 
-  // ── Shared inline style constants (menggantikan CSS class) ────────────────────
-  // ManageEngine strips <style> blocks — semua style harus inline agar tampil benar.
+  // -- Shared inline style constants (menggantikan CSS class) --------------------
+  // ManageEngine strips <style> blocks - semua style harus inline agar tampil benar.
   const S_P        = 'margin:0;line-height:1.5;';
   const S_REQUIRED = 'color:#d92d20;white-space:nowrap;';
   const S_TD_LABEL = 'padding:11px 14px;vertical-align:middle;background:#edf5f8;color:#173f56;font-weight:700;width:230px;border-right:1px solid #d6e0e7;border-bottom:1px solid #d6e0e7;';
@@ -123,7 +123,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
   const S_TD_LABEL_LAST = S_TD_LABEL.replace('border-bottom:1px solid #d6e0e7;', '');
   const S_TD_VALUE_LAST = S_TD_VALUE.replace('border-bottom:1px solid #d6e0e7;', '');
 
-  // ── Helper: baris label-value standar ─────────────────────────────────────────
+  // -- Helper: baris label-value standar -----------------------------------------
   function labelRow(labelText, valueText, isLast = false) {
     const sTdL = isLast ? S_TD_LABEL_LAST : S_TD_LABEL;
     const sTdV = isLast ? S_TD_VALUE_LAST : S_TD_VALUE;
@@ -138,11 +138,11 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       </tr>`;
   }
 
-  // ─── Baris khusus per kategori ────────────────────────────────────────────────
+  // --- Baris khusus per kategori ------------------------------------------------
   let categorySpecificRow = '';
 
   if (category === 'PASSWORD') {
-    // ── Reset Password: tampilkan Nama Aplikasi + Username Aplikasi ──
+    // -- Reset Password: tampilkan Nama Aplikasi + Username Aplikasi --
     const appName      = escapeHtml(data.nama_aplikasi      || '-');
     const usernameApps = escapeHtml(data.username_aplikasi  || '-');
     categorySpecificRow =
@@ -150,11 +150,11 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       labelRow('Username Aplikasi',  usernameApps, true);
 
   } else if (category === 'AUTORISASI') {
-    // ── Otorisasi: Nama Aplikasi + Username Aplikasi + Alasan + Tabel 2 Kolom Role ──
+    // -- Otorisasi: Nama Aplikasi + Username Aplikasi + Alasan + Tabel 2 Kolom Role --
     const appName        = escapeHtml(data.nama_aplikasi      || '-');
     const usernameApps   = escapeHtml(data.username_aplikasi  || '-');
     const alasanOtorisasi = escapeHtml(data.alasan_otorisasi  || '-');
-    // Nilai role: kosong / "-" → tampilkan sel kosong
+    // Nilai role: kosong / "-" -> tampilkan sel kosong
     const roleAssign = (data.role_assign && data.role_assign.trim() && data.role_assign.trim() !== '-')
       ? escapeHtml(data.role_assign.trim()) : '';
     const roleHapus  = (data.role_hapus  && data.role_hapus.trim()  && data.role_hapus.trim()  !== '-')
@@ -164,7 +164,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
     const S_TH_HAPUS  = 'padding:10px 14px;font-weight:700;color:#d92d20;background:#fff3f3;border:1px solid #d6e0e7;text-align:center;width:50%;';
     const S_TD_CELL   = 'padding:9px 14px;border:1px solid #d6e0e7;vertical-align:top;min-height:30px;';
 
-    // Buat 5 baris data — baris pertama diisi nilai user, sisanya kosong
+    // Buat 5 baris data - baris pertama diisi nilai user, sisanya kosong
     const buildRoleRows = () => {
       const rows = [];
       for (let r = 0; r < 5; r++) {
@@ -207,7 +207,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       </tr>`;
 
   } else if (category === 'KELUHAN') {
-    // ── Permintaan/Keluhan: tampilkan Nama Aplikasi + Username Aplikasi + Keluhan ──
+    // -- Permintaan/Keluhan: tampilkan Nama Aplikasi + Username Aplikasi + Keluhan --
     const appName      = escapeHtml(data.nama_aplikasi      || '-');
     const usernameApps = escapeHtml(data.username_aplikasi  || '-');
     const keluhanVal   = escapeHtml(data.keluhan            || '-');
@@ -217,7 +217,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       labelRow('Keluhan yang Dialami', keluhanVal, true);
 
   } else if (category === 'VPN') {
-    // ── Akses VPN: tampilkan User Account (email) + Alasan + Tabel Tanggal ──
+    // -- Akses VPN: tampilkan User Account (email) + Alasan + Tabel Tanggal --
     const emailUser = escapeHtml(verifiedUser?.email || data.requester || '-');
     const alasanVal = escapeHtml(data.alasan || '-');
     const tglAwal   = escapeHtml(data.tgl_awal || '-');
@@ -261,7 +261,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       </tr>`;
   }
 
-  // ─── Baris header NAMA APLIKASI: hanya untuk PASSWORD / AUTORISASI / KELUHAN ────────────
+  // --- Baris header NAMA APLIKASI: hanya untuk PASSWORD / AUTORISASI / KELUHAN ------------
   const appNameHeaderRow = (category === 'PASSWORD' || category === 'AUTORISASI' || category === 'KELUHAN')
     ? `
       <tr>
@@ -271,14 +271,14 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
       </tr>`
     : '';
 
-  // ─── Logo img atau fallback teks ─────────────────────────────────────────────
+  // --- Logo img atau fallback teks ---------------------------------------------
   const logoHtml = logoSrc
     ? `<img src="${logoSrc}" alt="Logo PLN Batam" width="80" height="50" style="display:block;margin:0 auto;object-fit:contain;"/>`
     : `<span style="font-size:9px;color:#888;">PLN Batam</span>`;
 
   return `<div style="width:100%;max-width:860px;margin:0 auto;background:#ffffff;font-family:Roboto,Arial,sans-serif;font-size:14px;color:#263746;">
 
-  <!-- ═══ HEADER TABLE ══════════════════════════════════════════════════════ -->
+  <!-- --- HEADER TABLE ------------------------------------------------------ -->
   <table cellpadding="0" cellspacing="0" border="0"
     style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;margin-bottom:18px;border:1px solid #d6e0e7;border-radius:14px;background:#ffffff;box-shadow:0 5px 18px rgba(30,63,83,0.08);">
     <colgroup>
@@ -308,7 +308,7 @@ function buildDescription(data, category, verifiedUser = null, config = null) {
     </tbody>
   </table>
 
-  <!-- ═══ FORM TABLE ════════════════════════════════════════════════════════ -->
+  <!-- --- FORM TABLE -------------------------------------------------------- -->
   <table cellpadding="0" cellspacing="0" border="0"
     style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d6e0e7;border-radius:14px;background:#ffffff;box-shadow:0 5px 18px rgba(30,63,83,0.06);">
     <colgroup>
@@ -359,17 +359,17 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
   }
 
   if (!TECHNICIAN_KEY) {
-    logger.warn('[Ticket] TECHNICIAN_KEY belum diset di .env — skip pengiriman');
+    logger.warn('[Ticket] TECHNICIAN_KEY belum diset di .env - skip pengiriman');
     return {
       success: false,
       message: 'Technician Key ManageEngine belum dikonfigurasi. Pengajuan tercatat.'
     };
   }
 
-  // ── Build description HTML dengan detail dari verifiedUser ──────────────────
+  // -- Build description HTML dengan detail dari verifiedUser ------------------
   let compiledDescription = buildDescription(data, category, verifiedUser, config);
 
-  // ── Requester: pakai id + name dari hasil GET /api/v3/users ─────────────
+  // -- Requester: pakai id + name dari hasil GET /api/v3/users -------------
   // ManageEngine lebih reliabel menerima id dibanding email_id.
   // id didapat dari verifiedUser yang sudah di-lookup sebelum submit.
   // Fallback ke email_id jika (unlikely) lookup tidak menghasilkan id.
@@ -377,10 +377,10 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
     ? { id: String(verifiedUser.id), name: verifiedUser.name }
     : { email_id: data.requester };
 
-  // ── Dapatkan Config ID secara dinamis (fallback ke env) ───────────────────
+  // -- Dapatkan Config ID secara dinamis (fallback ke env) -------------------
   const meConfig = await getMeConfigIds();
 
-  // ── Payload yang dikirim ke ManageEngine ──────────────────────────────────
+  // -- Payload yang dikirim ke ManageEngine ----------------------------------
   // [BUG-2 FIX] ID diambil dinamis dari ManageEngine API atau konstanta .env
   const requestBody = {
     subject:          config.autoSubject,
@@ -391,12 +391,12 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
     service_category: { id: meConfig.serviceCategoryId }
   };
 
-  // ── Pilih template berdasarkan tipe user ─────────────────────────────────
+  // -- Pilih template berdasarkan tipe user ---------------------------------
   // Untuk AUTORISASI, terdapat dua template:
-  //   1. templateId       (default: 2404) — "Formulir Permintaan Get Approvals"
-  //      → Dipakai user BIASA: memiliki approval level, notif dikirim ke atasan via WA.
-  //   2. seniorTemplateId (default: 2408) — "(Tanpa Approval) Pembuatan atau Perubahan Otorisasi"
-  //      → Dipakai ATASAN (isSenior=true): TIDAK ada approval level, tiket langsung ke teknisi.
+  //   1. templateId       (default: 2404) - "Formulir Permintaan Get Approvals"
+  //      -> Dipakai user BIASA: memiliki approval level, notif dikirim ke atasan via WA.
+  //   2. seniorTemplateId (default: 2408) - "(Tanpa Approval) Pembuatan atau Perubahan Otorisasi"
+  //      -> Dipakai ATASAN (isSenior=true): TIDAK ada approval level, tiket langsung ke teknisi.
   //        Menggantikan auto-approve via API yang tidak reliabel.
   const isSeniorUser = options?.isSenior === true;
   if (category === 'AUTORISASI') {
@@ -404,13 +404,13 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
       requestBody.template = { id: config.seniorTemplateId };
       logger.info(
         `[Ticket] Template SENIOR (tanpa approval) disertakan: ID=${config.seniorTemplateId} ` +
-        `— tiket atasan langsung ke teknisi tanpa approval workflow.`
+        `- tiket atasan langsung ke teknisi tanpa approval workflow.`
       );
     } else if (config.templateId) {
       requestBody.template = { id: config.templateId };
       logger.info(
         `[Ticket] Template AUTORISASI (dengan approval) disertakan: ID=${config.templateId} ` +
-        `— notifikasi approval akan dikirim ke atasan.`
+        `- notifikasi approval akan dikirim ke atasan.`
       );
     }
   }
@@ -418,7 +418,7 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
 
   const inputData = { request: requestBody };
 
-  // ── Lookup category & subcategory dari nama aplikasi ───────────────────────────────
+  // -- Lookup category & subcategory dari nama aplikasi -------------------------------
   // Cocokkan nama_aplikasi secara case-insensitive ke map dinamis (dari ManageEngine API).
   // Jika ditemukan, tambahkan category & subcategory ke requestBody.
   // Jika tidak ditemukan, tiket tetap dikirim tanpa kedua field tersebut.
@@ -431,11 +431,11 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
       requestBody.subcategory = { id: subcatInfo.subcategoryId };
       logger.info(`[Ticket] Subcategory ditemukan: ${subcatInfo.subcategoryName} (${subcatInfo.categoryName})`);
     } else {
-      logger.warn(`[Ticket] Nama aplikasi "${data.nama_aplikasi}" tidak ditemukan di subcategory map — category/subcategory tidak disertakan`);
+      logger.warn(`[Ticket] Nama aplikasi "${data.nama_aplikasi}" tidak ditemukan di subcategory map - category/subcategory tidak disertakan`);
     }
   }
 
-  // ── Fallback khusus kategori VPN ────────────────────────────────────────────
+  // -- Fallback khusus kategori VPN --------------------------------------------
   // Kategori "Akses VPN" tidak memiliki field nama_aplikasi (user hanya mengisi
   // alasan), sehingga lookup di atas tidak terpicu.
   // Solusi: jika bot-category === 'VPN' dan subcategory belum diset,
@@ -492,9 +492,9 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
     });
   }
 
-  // Langkah 1: POST — buat tiket
+  // Langkah 1: POST - buat tiket
   try {
-    logger.info(`[Ticket] Membuat request di ManageEngine — kategori: ${config.label}`);
+    logger.info(`[Ticket] Membuat request di ManageEngine - kategori: ${config.label}`);
 
     let response;
     try {
@@ -519,7 +519,7 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
     return _handleAxiosError('[Ticket] Gagal membuat request', err);
   }
 
-  // Langkah 2: GET /api/v3/requests/:id — ambil detail tiket resmi
+  // Langkah 2: GET /api/v3/requests/:id - ambil detail tiket resmi
   let ticketDetail = null;
   if (requestId) {
     ticketDetail = await getTicketDetail(requestId);
@@ -542,7 +542,7 @@ async function submitToEndpoint(category, data, verifiedUser = null, options = {
 async function getTicketDetail(requestId) {
   try {
     const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}`;
-    // logger.debug(`[Ticket] Mengambil detail tiket resmi — GET ${endpoint}`);
+    // logger.debug(`[Ticket] Mengambil detail tiket resmi - GET ${endpoint}`);
 
     const response = await axios.get(endpoint, {
       headers: AUTH_HEADERS,
@@ -551,12 +551,12 @@ async function getTicketDetail(requestId) {
 
     const ticket = response.data?.request || null;
     if (ticket) {
-      // logger.debug(`[Ticket] Detail tiket berhasil diambil — ID: ${requestId}`);
+      // logger.debug(`[Ticket] Detail tiket berhasil diambil - ID: ${requestId}`);
     }
     return ticket;
 
   } catch (err) {
-    // Tidak fatal — jika gagal, bot tetap kirim notifikasi dengan requestId saja
+    // Tidak fatal - jika gagal, bot tetap kirim notifikasi dengan requestId saja
     logger.warn(`[Ticket] Gagal ambil detail tiket ${requestId}: ${err.message}`);
     return null;
   }
@@ -569,9 +569,9 @@ async function getTicketDetail(requestId) {
  * Endpoint: GET /api/v3/requests/:request_id/notifications
  *
  * Return values:
- *   { notFound: true }  — tiket tidak ada di ManageEngine (HTTP 404), harus di-untrack
- *   []                  — sukses tapi tidak ada notifikasi baru
- *   [ ...notifs ]       — sukses, ada notifikasi baru
+ *   { notFound: true }  - tiket tidak ada di ManageEngine (HTTP 404), harus di-untrack
+ *   []                  - sukses tapi tidak ada notifikasi baru
+ *   [ ...notifs ]       - sukses, ada notifikasi baru
  *
  * @param {string} requestId - ID tiket dari ManageEngine
  * @returns {Promise<object[]|{notFound:boolean}>}
@@ -579,7 +579,7 @@ async function getTicketDetail(requestId) {
 async function getTicketNotifications(requestId) {
   try {
     const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/notifications`;
-    // logger.debug(`[Ticket] Mengambil notifikasi tiket — GET ${endpoint}`);
+    // logger.debug(`[Ticket] Mengambil notifikasi tiket - GET ${endpoint}`);
 
     const response = await axios.get(endpoint, {
       headers: AUTH_HEADERS,
@@ -592,10 +592,10 @@ async function getTicketNotifications(requestId) {
   } catch (err) {
     // Deteksi 404: tiket sudah tidak ada di ManageEngine (dihapus / tidak valid)
     if (err.response?.status === 404) {
-      logger.warn(`[Ticket] Tiket ${requestId} tidak ditemukan di ManageEngine (404) — tandai untuk dihapus dari tracking.`);
+      logger.warn(`[Ticket] Tiket ${requestId} tidak ditemukan di ManageEngine (404) - tandai untuk dihapus dari tracking.`);
       return { notFound: true };
     }
-    // Error lain (timeout, 5xx, dll) — anggap sementara, jangan untrack
+    // Error lain (timeout, 5xx, dll) - anggap sementara, jangan untrack
     logger.warn(`[Ticket] Gagal ambil notifikasi tiket ${requestId}: ${err.message}`);
     return [];
   }
@@ -614,7 +614,7 @@ async function getTicketNotifications(requestId) {
  */
 async function lookupUserByEmail(email) {
   if (!TECHNICIAN_KEY) {
-    logger.warn('[Lookup] TECHNICIAN_KEY belum diset — tidak dapat melakukan lookup user');
+    logger.warn('[Lookup] TECHNICIAN_KEY belum diset - tidak dapat melakukan lookup user');
     return { found: false, message: 'Technician Key belum dikonfigurasi.' };
   }
 
@@ -629,7 +629,7 @@ async function lookupUserByEmail(email) {
         email_id: email.trim()
       }
     },
-    // fields_required di GET all users TIDAK mencakup reporting_to —
+    // fields_required di GET all users TIDAK mencakup reporting_to -
     // reporting_to hanya tersedia di GET /api/v3/users/{id}
     fields_required: [
       'name',
@@ -674,8 +674,8 @@ async function lookupUserByEmail(email) {
       u.last_name || ''
     ].filter(Boolean).join(' ').trim() || u.name || u.full_name || '-';
 
-    // ── Langkah 2: GET /api/v3/users/{id} untuk mendapatkan reporting_to ──────────────
-    // GET all users TIDAK mengembalikan reporting_to — harus ambil dari endpoint individual.
+    // -- Langkah 2: GET /api/v3/users/{id} untuk mendapatkan reporting_to --------------
+    // GET all users TIDAK mengembalikan reporting_to - harus ambil dari endpoint individual.
     // Endpoint individual SELALU menyertakan reporting_to lengkap (phone, id, name, email).
     let reportingToData = null;
     let supervisorWa    = null;
@@ -692,7 +692,7 @@ async function lookupUserByEmail(email) {
           supervisorMeId  = String(reportingToData.id || '').trim() || null;
 
           // Normalisasi nomor WA atasan dari reporting_to
-          // Mendukung: +628xxx, 628xxx, 08xxx, 8xxx → semua jadi 628xxx
+          // Mendukung: +628xxx, 628xxx, 08xxx, 8xxx -> semua jadi 628xxx
           const rawPhone = reportingToData.phone || reportingToData.mobile || null;
           if (rawPhone) {
             const cleanPhone = rawPhone.replace(/\D/g, '');
@@ -722,47 +722,47 @@ async function lookupUserByEmail(email) {
         // sehingga kita baca dari userDetail.jobtitle (bukan .jobTitle).
         const rawJobTitle = userDetail?.jobtitle || userDetail?.jobTitle || '';
         const jobTitle = rawJobTitle.toUpperCase();
-        logger.info(`[Lookup] User ID ${u.id} — jobTitle dari ME: "${rawJobTitle || '(kosong)'}"`); 
+        logger.info(`[Lookup] User ID ${u.id} - jobTitle dari ME: "${rawJobTitle || '(kosong)'}"`); 
 
-        // Keyword senior: ASMAN (Asisten Manajer) dan ke atas — sesuai hierarki PLN/korporat Indonesia.
+        // Keyword senior: ASMAN (Asisten Manajer) dan ke atas - sesuai hierarki PLN/korporat Indonesia.
         // Singkatan umum:
-        //   ASMAN / ASMGR / AS MAN / AS. MAN / ASISTEN MAN* → Asisten Manajer (level minimum)
-        //   MAN / MGR / MANAJER / MANAGER               → Manajer
-        //   SM / SR MGR / SENIOR MAN*                   → Senior Manager
-        //   KAMAN / KADIV / KADEP / KABID               → Kepala Divisi / Departemen / Bidang
-        //   GM / GEN MAN*                               → General Manager
-        //   VP / VICE PRES*                             → Vice President
-        //   SVP / SR VP / SENIOR VP                    → Senior Vice President
-        //   EVP / EXC VP / EXEC VP                     → Executive Vice President
-        //   DIR / DIREKTUR / DIRECTOR                  → Direktur
-        //   DIRUT / DIRUTAMA                           → Direktur Utama
+        //   ASMAN / ASMGR / AS MAN / AS. MAN / ASISTEN MAN* -> Asisten Manajer (level minimum)
+        //   MAN / MGR / MANAJER / MANAGER               -> Manajer
+        //   SM / SR MGR / SENIOR MAN*                   -> Senior Manager
+        //   KAMAN / KADIV / KADEP / KABID               -> Kepala Divisi / Departemen / Bidang
+        //   GM / GEN MAN*                               -> General Manager
+        //   VP / VICE PRES*                             -> Vice President
+        //   SVP / SR VP / SENIOR VP                    -> Senior Vice President
+        //   EVP / EXC VP / EXEC VP                     -> Executive Vice President
+        //   DIR / DIREKTUR / DIRECTOR                  -> Direktur
+        //   DIRUT / DIRUTAMA                           -> Direktur Utama
         const seniorKeywords = [
-          // ── Asisten Manajer (level minimum auto-approve) ──────────────────
+          // -- Asisten Manajer (level minimum auto-approve) ------------------
           'ASMAN', 'ASMGR', 'AS MAN', 'AS MGR', 'AS. MAN', 'AS. MGR',
           'ASISTEN MAN', 'ASISTEN MGR', 'ASISTEN MANAGER', 'ASISTEN MANAJER',
           'ASSISTANT MANAGER', 'ASST MANAGER', 'ASST MGR',
-          // ── Manajer ───────────────────────────────────────────────────────
+          // -- Manajer -------------------------------------------------------
           'MANAJER', 'MANAGER', 'MGR', 'MAN',
-          // ── Senior Manager ────────────────────────────────────────────────
+          // -- Senior Manager ------------------------------------------------
           'SM', 'SR MGR', 'SR MAN', 'SR. MGR', 'SR. MAN',
           'SENIOR MANAGER', 'SENIOR MANAJER', 'SENIOR MGR',
-          // ── Kepala (Divisi / Departemen / Bidang / Bagian) ────────────────
+          // -- Kepala (Divisi / Departemen / Bidang / Bagian) ----------------
           'KADIV', 'KADEP', 'KABAG', 'KABID', 'KAMAN',
           'KEPALA DIVISI', 'KEPALA DEPARTEMEN', 'KEPALA BIDANG', 'KEPALA BAGIAN',
-          // ── General Manager ───────────────────────────────────────────────
+          // -- General Manager -----------------------------------------------
           'GM', 'GENERAL MANAGER', 'GENERAL MGR',
-          // ── Vice President ────────────────────────────────────────────────
+          // -- Vice President ------------------------------------------------
           'VP', 'VICE PRESIDENT', 'VICE PRES',
-          // ── Senior Vice President ─────────────────────────────────────────
+          // -- Senior Vice President -----------------------------------------
           'SVP', 'SR VP', 'SR. VP', 'SENIOR VP', 'SENIOR VICE PRESIDENT',
-          // ── Executive Vice President ──────────────────────────────────────
+          // -- Executive Vice President --------------------------------------
           'EVP', 'EXC VP', 'EXEC VP', 'EXECUTIVE VICE PRESIDENT',
-          // ── Direktur ──────────────────────────────────────────────────────
+          // -- Direktur ------------------------------------------------------
           'DIR', 'DIREKTUR', 'DIRECTOR',
           'DIRUT', 'DIRUTAMA', 'DIREKTUR UTAMA',
-          // ── Komisaris ─────────────────────────────────────────────────────
+          // -- Komisaris -----------------------------------------------------
           'KOMUT', 'KOMISARIS UTAMA', 'KOMISARIS',
-          // ── Wakil / Deputi / Asisten (Level Atas) ─────────────────────────
+          // -- Wakil / Deputi / Asisten (Level Atas) -------------------------
           'WAKADIV', 'WAKADEP', 'WADIR', 'WADIRUT', 'WAGM', 'WASM',
           'DEPUTI', 'DEPUTY'
         ];
@@ -773,10 +773,10 @@ async function lookupUserByEmail(email) {
         });
 
         if (isSenior) {
-          logger.info(`[Lookup] User ID ${u.id} memiliki jabatan '${rawJobTitle}' (Senior/Manajemen) → isSenior = true (auto-approve)`);
+          logger.info(`[Lookup] User ID ${u.id} memiliki jabatan '${rawJobTitle}' (Senior/Manajemen) -> isSenior = true (auto-approve)`);
         }
       } catch (detailErr) {
-        logger.warn(`[Lookup] Gagal ambil detail user ${u.id}: ${detailErr.message} — reporting_to diabaikan.`);
+        logger.warn(`[Lookup] Gagal ambil detail user ${u.id}: ${detailErr.message} - reporting_to diabaikan.`);
       }
     }
 
@@ -795,15 +795,15 @@ async function lookupUserByEmail(email) {
       lastName:      u.last_name || '',
       isTechnician:  u.is_technician || false,
       isVipUser:     u.is_vipuser || false,
-      isSenior,          // true jika org_role 'Reporting To' → auto-approve AUTORISASI
+      isSenior,          // true jika org_role 'Reporting To' -> auto-approve AUTORISASI
       reportingTo:   reportingToData,
       supervisorWa,
       supervisorMeId
     };
 
     logger.info(
-      `[Lookup] User ditemukan: ${user.name} (${user.department}) — ` +
-      `atasan: ${user.reportingTo?.name || 'tidak ada'} (ME ID: ${supervisorMeId || '-'}) — ` +
+      `[Lookup] User ditemukan: ${user.name} (${user.department}) - ` +
+      `atasan: ${user.reportingTo?.name || 'tidak ada'} (ME ID: ${supervisorMeId || '-'}) - ` +
       `supervisorWa: ${user.supervisorWa || '(phone/mobile tidak ada di reporting_to)'}`
     );
     return { found: true, user };
@@ -826,7 +826,7 @@ async function getUserById(userId) {
   if (!userId) return null;
   try {
     const endpoint = `${ME_BASE_URL}/api/v3/users/${userId}`;
-    logger.info(`[Ticket] Mengambil detail user by ID — GET ${endpoint}`);
+    logger.info(`[Ticket] Mengambil detail user by ID - GET ${endpoint}`);
 
     const response = await axios.get(endpoint, {
       headers: AUTH_HEADERS,
@@ -847,16 +847,16 @@ async function getUserById(userId) {
       : null;
 
     // org_roles: daftar peran organisasi user di ManageEngine.
-    // Contoh: [{ name: 'Reporting To', id: 2 }] — artinya user ini adalah atasan bagi orang lain.
+    // Contoh: [{ name: 'Reporting To', id: 2 }] - artinya user ini adalah atasan bagi orang lain.
     const orgRoles = Array.isArray(u.org_roles) ? u.org_roles : [];
 
-    logger.info(`[Ticket] Detail user ID ${userId} — atasan: ${reportingTo?.name || 'tidak ada'}, org_roles: [${orgRoles.map(r => r.name).join(', ') || 'kosong'}]`);
+    logger.info(`[Ticket] Detail user ID ${userId} - atasan: ${reportingTo?.name || 'tidak ada'}, org_roles: [${orgRoles.map(r => r.name).join(', ') || 'kosong'}]`);
 
     return {
       id:         u.id || String(userId),
       name:       u.name || '-',
       jobtitle:   u.jobtitle || '',      // key asli dari ManageEngine
-      jobTitle:   u.jobtitle || '',      // camelCase alias — untuk konsistensi dengan user object
+      jobTitle:   u.jobtitle || '',      // camelCase alias - untuk konsistensi dengan user object
       phone:      u.phone  || null,
       mobile:     u.mobile || null,
       reportingTo,
@@ -882,7 +882,7 @@ async function getUserById(userId) {
 async function getApprovalLevels(requestId) {
   try {
     const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/approval_levels`;
-    logger.info(`[Ticket] Mengambil approval levels — GET ${endpoint}`);
+    logger.info(`[Ticket] Mengambil approval levels - GET ${endpoint}`);
 
     const response = await axios.get(endpoint, {
       headers: AUTH_HEADERS,
@@ -913,7 +913,7 @@ async function getApprovalLevels(requestId) {
 async function getApprovalsByLevel(requestId, levelId) {
   try {
     const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/approval_levels/${levelId}/approvals`;
-    logger.info(`[Ticket] Mengambil approvals level ${levelId} — GET ${endpoint}`);
+    logger.info(`[Ticket] Mengambil approvals level ${levelId} - GET ${endpoint}`);
 
     const response = await axios.get(endpoint, {
       headers: AUTH_HEADERS,
@@ -943,7 +943,7 @@ async function approveTicket(requestId, levelNumber, approvalId) {
   try {
     const endpoint =
       `${ENDPOINT_REQUESTS_BASE}/${requestId}/approval_levels/${levelNumber}/approvals/${approvalId}/_approve`;
-    logger.info(`[Ticket] APPROVE tiket ${requestId} — PUT ${endpoint}`);
+    logger.info(`[Ticket] APPROVE tiket ${requestId} - PUT ${endpoint}`);
 
     // Body sesuai spec Postman collection ManageEngine:
     // Content-Type: application/x-www-form-urlencoded
@@ -959,7 +959,7 @@ async function approveTicket(requestId, levelNumber, approvalId) {
       timeout: 15000
     });
 
-    logger.info(`[Ticket] ✓ Tiket ${requestId} berhasil di-APPROVE`);
+    logger.info(`[Ticket]  Tiket ${requestId} berhasil di-APPROVE`);
     return { success: true };
 
   } catch (err) {
@@ -984,7 +984,7 @@ async function rejectTicket(requestId, levelNumber, approvalId) {
   try {
     const endpoint =
       `${ENDPOINT_REQUESTS_BASE}/${requestId}/approval_levels/${levelNumber}/approvals/${approvalId}/_reject`;
-    logger.info(`[Ticket] REJECT tiket ${requestId} — PUT ${endpoint}`);
+    logger.info(`[Ticket] REJECT tiket ${requestId} - PUT ${endpoint}`);
 
     // Body sesuai spec Postman collection ManageEngine:
     // Content-Type: application/x-www-form-urlencoded
@@ -1000,7 +1000,7 @@ async function rejectTicket(requestId, levelNumber, approvalId) {
       timeout: 15000
     });
 
-    logger.info(`[Ticket] ✓ Tiket ${requestId} berhasil di-REJECT`);
+    logger.info(`[Ticket]  Tiket ${requestId} berhasil di-REJECT`);
     return { success: true };
 
   } catch (err) {
@@ -1029,7 +1029,7 @@ async function rejectTicket(requestId, levelNumber, approvalId) {
 async function createApprovalLevel(requestId) {
   const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/approval_levels`;
 
-  // Payload tanpa field 'level' — ManageEngine auto-assign nomor level
+  // Payload tanpa field 'level' - ManageEngine auto-assign nomor level
   // (field 'level' dianggap read-only oleh ME dan menyebabkan error jika diisi)
   const params = new URLSearchParams();
   params.append('input_data', JSON.stringify({ approval_level: {} }));
@@ -1041,7 +1041,7 @@ async function createApprovalLevel(requestId) {
 
   for (const attempt of attempts) {
     try {
-      logger.info(`[Ticket] Membuat approval level — POST ${endpoint} (auth: ${attempt.label})`);
+      logger.info(`[Ticket] Membuat approval level - POST ${endpoint} (auth: ${attempt.label})`);
       const response = await axios.post(endpoint, params, { headers: attempt.headers, timeout: 15000 });
 
       const levelId = String(
@@ -1052,13 +1052,13 @@ async function createApprovalLevel(requestId) {
 
       if (!levelId) {
         logger.warn(
-          `[Ticket] Approval level dibuat (${attempt.label}) tapi ID tidak ada — ` +
+          `[Ticket] Approval level dibuat (${attempt.label}) tapi ID tidak ada - ` +
           `tiket ${requestId}, respons: ${JSON.stringify(response.data).substring(0, 200)}`
         );
         return { success: false, error: 'Level ID tidak ditemukan di respons ManageEngine' };
       }
 
-      logger.info(`[Ticket] ✓ Approval level berhasil dibuat (${attempt.label}) — tiket ${requestId}, levelId: ${levelId}`);
+      logger.info(`[Ticket]  Approval level berhasil dibuat (${attempt.label}) - tiket ${requestId}, levelId: ${levelId}`);
       return { success: true, levelId };
 
     } catch (err) {
@@ -1104,7 +1104,7 @@ async function addApproverToLevel(requestId, levelId, supervisorMeId) {
   for (const attempt of attempts) {
     try {
       logger.info(
-        `[Ticket] Menambahkan approver ME ID=${supervisorMeId} ke level ${levelId} — ` +
+        `[Ticket] Menambahkan approver ME ID=${supervisorMeId} ke level ${levelId} - ` +
         `POST ${endpoint} (auth: ${attempt.label})`
       );
       const response = await axios.post(endpoint, params, { headers: attempt.headers, timeout: 15000 });
@@ -1117,14 +1117,14 @@ async function addApproverToLevel(requestId, levelId, supervisorMeId) {
 
       if (!approvalId) {
         logger.warn(
-          `[Ticket] Approver ditambahkan (${attempt.label}) tapi approval ID tidak ada — ` +
+          `[Ticket] Approver ditambahkan (${attempt.label}) tapi approval ID tidak ada - ` +
           `tiket ${requestId}, respons: ${JSON.stringify(response.data).substring(0, 200)}`
         );
         return { success: false, error: 'Approval ID tidak ditemukan di respons ManageEngine' };
       }
 
       logger.info(
-        `[Ticket] ✓ Approver berhasil ditambahkan (${attempt.label}) — ` +
+        `[Ticket]  Approver berhasil ditambahkan (${attempt.label}) - ` +
         `tiket ${requestId}, levelId: ${levelId}, approvalId: ${approvalId}`
       );
       return { success: true, approvalId };
@@ -1151,28 +1151,28 @@ function _handleAxiosError(prefix, err) {
       || err.response.data?.message
       || JSON.stringify(err.response.data)?.substring(0, 200)
       || 'Unknown error';
-    logger.error(`${prefix} — HTTP ${status}: ${detail}`);
+    logger.error(`${prefix} - HTTP ${status}: ${detail}`);
     return {
       success: false,
       found: false,
       message: `Server ManageEngine merespons dengan error ${status}: ${detail}`
     };
   } else if (err.code === 'ECONNABORTED') {
-    logger.error(`${prefix} — Timeout (30 detik)`);
+    logger.error(`${prefix} - Timeout (30 detik)`);
     return {
       success: false,
       found: false,
       message: 'Server ManageEngine tidak merespons (timeout). Silakan hubungi Tim IT secara langsung.'
     };
   } else if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-    logger.error(`${prefix} — Tidak dapat terhubung: ${err.message}`);
+    logger.error(`${prefix} - Tidak dapat terhubung: ${err.message}`);
     return {
       success: false,
       found: false,
       message: 'Tidak dapat terhubung ke server ManageEngine. Silakan hubungi Tim IT secara langsung.'
     };
   } else {
-    logger.error(`${prefix} — Error tidak terduga: ${err.message}`);
+    logger.error(`${prefix} - Error tidak terduga: ${err.message}`);
     return {
       success: false,
       found: false,
@@ -1186,12 +1186,12 @@ function _handleAxiosError(prefix, err) {
  *
  * Alur sesuai Postman Collection On-Premise (Add and associate attachment):
  *   PUT /api/v3/requests/:request_id/upload
- *   — Upload file DAN asosiasikan langsung ke tiket dalam satu request.
+ *   - Upload file DAN asosiasikan langsung ke tiket dalam satu request.
  *
  * Content-Type: multipart/form-data (set otomatis oleh form-data library)
  * Field       : input_file (type: file)
  * Headers     : TECHNICIAN_KEY, PORTALID, Accept
- *               (TANPA Content-Type manual — biarkan form-data set boundary)
+ *               (TANPA Content-Type manual - biarkan form-data set boundary)
  *
  * Response    : { attachment: { id, name, content_type, ... }, response_status: { status_code: 2000 } }
  *
@@ -1230,7 +1230,7 @@ async function uploadAttachments(requestId, mediaList) {
 
       // Satu langkah: Upload DAN asosiasikan ke tiket via PUT /api/v3/requests/:requestId/upload
       const uploadEndpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/upload`;
-      logger.info(`[Ticket] Mengunggah foto ke-${i+1} ke tiket ${requestId} — PUT ${uploadEndpoint}`);
+      logger.info(`[Ticket] Mengunggah foto ke-${i+1} ke tiket ${requestId} - PUT ${uploadEndpoint}`);
 
       const uploadResponse = await axios.put(uploadEndpoint, form, {
         headers: {
@@ -1249,7 +1249,7 @@ async function uploadAttachments(requestId, mediaList) {
 
       if (!attachmentId || statusCode !== 2000) {
         logger.warn(
-          `[Ticket] Upload foto ke-${i+1} gagal atau attachment ID tidak tersedia — ` +
+          `[Ticket] Upload foto ke-${i+1} gagal atau attachment ID tidak tersedia - ` +
           `tiket: ${requestId}, status: ${statusCode}, ` +
           `respons: ${JSON.stringify(uploadResponse.data).substring(0, 200)}`
         );
@@ -1257,7 +1257,7 @@ async function uploadAttachments(requestId, mediaList) {
         result.errors.push(`Gagal upload foto ke-${i+1}`);
       } else {
         logger.info(
-          `[Ticket] ✓ Foto ke-${i+1} berhasil diunggah dan ditautkan ke tiket ${requestId} — ` +
+          `[Ticket]  Foto ke-${i+1} berhasil diunggah dan ditautkan ke tiket ${requestId} - ` +
           `attachment ID: ${attachmentId}, nama: ${attachment.name || filename}`
         );
         result.uploaded++;
@@ -1284,7 +1284,7 @@ async function uploadAttachments(requestId, mediaList) {
 async function getTicketAttachments(requestId) {
   try {
     const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/attachments`;
-    logger.info(`[Ticket] Mengambil list attachment tiket ${requestId} — GET ${endpoint}`);
+    logger.info(`[Ticket] Mengambil list attachment tiket ${requestId} - GET ${endpoint}`);
     const response = await axios.get(endpoint, {
       headers: {
         'TECHNICIAN_KEY': TECHNICIAN_KEY,
@@ -1312,7 +1312,7 @@ async function getTicketAttachments(requestId) {
 async function downloadTicketAttachment(requestId, attachmentId, contentType = null) {
   try {
     const endpoint = `${ENDPOINT_REQUESTS_BASE}/${requestId}/attachments/${attachmentId}/download`;
-    logger.info(`[Ticket] Mendownload attachment ${attachmentId} dari tiket ${requestId} — GET ${endpoint}`);
+    logger.info(`[Ticket] Mendownload attachment ${attachmentId} dari tiket ${requestId} - GET ${endpoint}`);
     const response = await axios.get(endpoint, {
       headers: {
         'TECHNICIAN_KEY': TECHNICIAN_KEY,
@@ -1326,7 +1326,7 @@ async function downloadTicketAttachment(requestId, attachmentId, contentType = n
     });
 
     if (!response.data || response.data.byteLength === 0) {
-      logger.warn(`[Ticket] Attachment ${attachmentId} — response kosong`);
+      logger.warn(`[Ticket] Attachment ${attachmentId} - response kosong`);
       return null;
     }
 
@@ -1335,7 +1335,7 @@ async function downloadTicketAttachment(requestId, attachmentId, contentType = n
       || contentType
       || 'application/octet-stream';
 
-    logger.info(`[Ticket] ✓ Attachment ${attachmentId} didownload — ${response.data.byteLength} bytes, mime: ${mime}`);
+    logger.info(`[Ticket]  Attachment ${attachmentId} didownload - ${response.data.byteLength} bytes, mime: ${mime}`);
     return {
       data: Buffer.from(response.data).toString('base64'),
       content_type: mime.split(';')[0].trim()  // hapus bagian "; charset=..." jika ada
