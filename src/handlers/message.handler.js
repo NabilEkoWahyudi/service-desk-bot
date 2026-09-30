@@ -1379,7 +1379,8 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
  // Agar setiap notifikasi/balasan dari admin di ManageEngine
  // diteruskan langsung ke WhatsApp pegawai ini.
  if (result.requestId) {
- registerTicket(result.requestId, waNumber, null, null, null, null, uploadResult?.attachmentIds || []);
+ const verifiedUserForNotif = session.verifiedUser || (session.data?.requester_name ? { name: session.data.requester_name } : null);
+				registerTicket(result.requestId, waNumber, null, null, verifiedUserForNotif, session.data?.nama_aplikasi || null, uploadResult?.attachmentIds || []);
  }
 
  const successLines = [

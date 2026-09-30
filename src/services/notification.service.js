@@ -85,6 +85,7 @@ function loadTrackedTickets() {
         supervisorWa:  info.supervisorWa  || null,
         supervisorMeId: info.supervisorMeId || null,
         appName:       info.appName       || null,   // nama aplikasi (persist lintas restart)
+        requesterName: info.requesterName || null,
         seenIds:       new Set(Array.isArray(info.seenIds) ? info.seenIds : []),
         seenAttachmentIds: new Set(Array.isArray(info.seenAttachmentIds) ? info.seenAttachmentIds : []),
         registeredAt:  info.registeredAt,
@@ -115,6 +116,7 @@ function saveTrackedTickets() {
         supervisorWa:   info.supervisorWa   || null,
         supervisorMeId: info.supervisorMeId || null,
         appName:        info.appName        || null,   // nama aplikasi (untuk pesan ke atasan)
+        requesterName:  info.requesterName  || null,
         seenIds:        [...info.seenIds],
         seenAttachmentIds: [...(info.seenAttachmentIds || [])],
         registeredAt:   info.registeredAt,
@@ -201,7 +203,7 @@ function buildApprovalRequestMsg(requestId, ticketDescription, approvalItem) {
  * @param {object|null} staffData  - Data user dari verifiedUser/getUserById
  * @returns {string}
  */
-function buildSystemNotifMsg(requestId, notif, ticketDesc, staffData = null) {
+function buildSystemNotifMsg(requestId, notif, ticketDesc, staffData = null, requesterName = null) {
   const subject = (notif.subject || '').toLowerCase();
   const isApproved = subject.includes('approved') || subject.includes('approve');
   const isRejected = subject.includes('rejected') || subject.includes('reject');
@@ -239,7 +241,7 @@ function buildSystemNotifMsg(requestId, notif, ticketDesc, staffData = null) {
   }
 
   // Fallback: system notification lainnya (mis. tiket closed, dsb)
-  return formatNotificationMessage(requestId, notif, ticketDesc);
+  return formatNotificationMessage(requestId, notif, ticketDesc, staffData, requesterName);
 }
 
 /**
@@ -278,7 +280,7 @@ function extractFieldValue(text, fieldNames) {
  * @param {string}      ticketDesc  - Deskripsi tiket asli (dipakai sebagai fallback)
  * @param {object|null} staffData   - Data user dari info.staffData (sumber utama)
  */
-function formatNotificationMessage(requestId, notif, ticketDesc, staffData = null) {
+function formatNotificationMessage(requestId, notif, ticketDesc, staffData = null, requesterName = null) {
   const subject       = notif.subject        || notif.request?.subject || '-';
   const ticketSubject = notif.request?.subject || subject;
 
@@ -355,19 +357,28 @@ function formatNotificationMessage(requestId, notif, ticketDesc, staffData = nul
 
   // Tampilkan pesan balasan admin jika ada dan tidak sama dengan konten form
   if (balasanLines.length > 0) {
-    // Batasi panjang dan filter agar tidak menampilkan ulang seluruh form tiket
-    const relevantLines = balasanLines.filter(l =>
-      !l.match(/^(Aplikasi|Judul|Nomor Tiket|Formulir|OPS TI|Komitmen|Dengan ini|PERMINTAAN|Lokasi|Unit\/Bidang)\b/i)
-    );
+    // Batasi panjang dan filter agar tidak menampilkan ulang seluruh form tiket atau garis pembatas
+    const relevantLines = balasanLines.filter(l => {
+      const trimmed = l.trim();
+      if (!trimmed) return false;
+      if (/^[=\-_~*#\s]{3,}$/.test(trimmed)) return false;
+      if (/^(Aplikasi|Judul|Nomor Tiket|No\. Tiket|Formulir|OPS TI|Komitmen|Dengan ini|PERMINTAAN|Lokasi|Unit\/Bidang)\b/i.test(trimmed)) return false;
+      return true;
+    });
     if (relevantLines.length > 0) {
       const preview = relevantLines.slice(0, 10).join('\n');
-      msg += `\n\n *Balasan:*\n${preview}`;
+      msg += `\n\n*Balasan:*\n${preview}`;
     }
   }
 
+  const requester = requesterName || namaLengkap || staffData?.name || '';
+  const footerBalasan = requester
+    ? `_Balasan ini untuk ${requester} tiket No. ${requestId}_`
+    : `_Balasan ini untuk tiket No. ${requestId}_`;
+
   msg +=
     `\n\n---\n` +
-    `_Balasan ini untuk tiket No. ${requestId}_\n` +
+    `${footerBalasan}\n` +
     `_Ketik *menu* untuk mengajukan request baru._`;
 
   return msg;
@@ -677,8 +688,13 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
 
       } else if (notifType === 'system_notification') {
         // Notifikasi status sistem (has been Approved / Rejected) -> ke pegawai
+        const reqName = info.requesterName || info.staffData?.name || ticketDetailObj?.requester?.name || notif?.to?.[0]?.name || '';
+        if (!info.requesterName && reqName) {
+          info.requesterName = reqName;
+          saveTrackedTickets();
+        }
         targetWa = info.waNumber;
-        msg      = buildSystemNotifMsg(requestId, notif, ticketDesc, info.staffData || null);
+        msg      = buildSystemNotifMsg(requestId, notif, ticketDesc, info.staffData || null, reqName);
         logger.info(`[Notif] Notifikasi system #${notifId} tiket ${requestId} -> WA pegawai ${targetWa}`);
 
       } else {
@@ -689,7 +705,12 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
           ? { ...info.staffData, appName: info.appName || '' }
           : (info.appName ? { appName: info.appName } : null);
         targetWa = info.waNumber;
-        msg      = formatNotificationMessage(requestId, notif, ticketDesc, staffDataWithApp);
+        const reqName = info.requesterName || info.staffData?.name || ticketDetailObj?.requester?.name || notif?.to?.[0]?.name || '';
+        if (!info.requesterName && reqName) {
+          info.requesterName = reqName;
+          saveTrackedTickets();
+        }
+        msg      = formatNotificationMessage(requestId, notif, ticketDesc, staffDataWithApp, reqName);
         logger.info(`[Notif] Notifikasi #${notifId} (type: ${notifType || 'unknown'}) tiket ${requestId} -> WA ${targetWa}`);
       }
 
@@ -744,7 +765,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
  fileData.data,
  fileData.content_type,
  filename,
- `[Lampiran] Balasan dari Admin - Tiket #${requestId}`
+ photoCaption
  );
  if (sendResult.success) {
  logger.info(`[Notif] Gambar inline ke-${i+1} terkirim ke WA ${targetWa}`);
@@ -771,7 +792,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
  fileData.data,
  fileData.content_type,
  nAtt.name || `lampiran_${nAtt.id}.jpg`,
- `[Lampiran] Lampiran dari Admin - Tiket #${requestId}`
+ photoCaption
  );
  if (sendResult.success) {
  logger.info(`[Notif] Attachment notifikasi #${nAtt.id} terkirim ke WA ${targetWa}`);
@@ -817,7 +838,7 @@ async function pollSingleTicket(requestId, { skipIntervalCheck = false } = {}) {
  fileData.data,
  finalMime,
  att.name || `lampiran_${att.id}.jpg`,
- `[Lampiran] Lampiran dari Admin - Tiket #${requestId}`
+ photoCaption
  );
  if (sendResult.success) {
  logger.info(`[Notif] Lampiran foto ${attIdStr} terkirim ke WA ${targetWa}`);
@@ -917,10 +938,12 @@ function registerTicket(requestId, waNumber, supervisorWa = null, supervisorMeId
     supervisorWa:   supervisorWa   || null,
     supervisorMeId: supervisorMeId || null,
     appName:        appName        || null,   // nama aplikasi untuk pesan ke atasan
+    requesterName:  verifiedUser?.name || null,
     // Simpan data user (nama, NIP, jabatan, dll) untuk dipakai saat kirim pesan ke atasan
     // Disimpan di memory saja (tidak di-persist ke disk untuk privacy)
     staffData:      verifiedUser   || null,
     seenIds:        new Set(),
+    seenAttachmentIds: new Set(initialAttachmentIds.map(String)),
     registeredAt:   Date.now(),
     lastCheckedAt:  0
   });
