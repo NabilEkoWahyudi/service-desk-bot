@@ -607,6 +607,58 @@ async function uploadSessionMedia(requestId, session) {
  * session.mediaList sehingga aman dijalankan tanpa lock (JS event loop
  * single-threaded menjamin push() ke array tidak race-condition).
  */
+
+// --- Debounce pesan penolakan foto album -----------------------------------
+// Ketika user mengirim album (>1 foto), WhatsApp kirim tiap foto sebagai
+// pesan terpisah secara cepat. Agar bot tidak spam pesan penolakan satu
+// per foto, semua penolakan dalam jendela PHOTO_REJECT_DEBOUNCE_MS digabung
+// menjadi SATU pesan. Jika hanya 1 foto -> pesan singular, >1 -> plural.
+const PHOTO_REJECT_DEBOUNCE_MS = 2000; // 2 detik window
+const photoRejectDebounce = new Map();
+
+function debouncedPhotoReject(waNumber, sendReply, state) {
+ const existing = photoRejectDebounce.get(waNumber);
+ if (existing) {
+  clearTimeout(existing.timer);
+  existing.count++;
+ } else {
+  const entry = { count: 1, sendReply, state, timer: null };
+  photoRejectDebounce.set(waNumber, entry);
+ }
+ const entry = photoRejectDebounce.get(waNumber);
+ entry.timer = setTimeout(async () => {
+  photoRejectDebounce.delete(waNumber);
+  const { count, sendReply: reply, state: st } = entry;
+  if (st === STATE.FILLING_FORM) {
+   if (count > 1) {
+    await reply(
+     'Semua Foto belum dapat diterima saat ini.\n' +
+     'Silakan selesaikan pengisian formulir terlebih dahulu.\n' +
+     'Setelah email Anda terverifikasi, Anda bisa melampirkan foto sebelum mengirim tiket.'
+    );
+   } else {
+    await reply(
+     'Foto belum dapat diterima saat ini.\n\n' +
+     'Silakan selesaikan pengisian formulir terlebih dahulu.\n' +
+     'Setelah email Anda terverifikasi, Anda bisa melampirkan foto sebelum mengirim tiket.'
+    );
+   }
+  } else {
+   if (count > 1) {
+    await reply(
+     'Semua foto tidak dapat dikirim.\n\n' +
+     'Anda belum mengisi formulir dan email belum terverifikasi.\n' +
+     'Ketik *menu* untuk memulai pengajuan request.'
+    );
+   } else {
+    await reply(
+     'Foto hanya dapat dikirim setelah Anda mengisi formulir dan email terverifikasi.\n\n' +
+     'Ketik *menu* untuk memulai pengajuan request.'
+    );
+   }
+  }
+ }, PHOTO_REJECT_DEBOUNCE_MS);
+}
 async function handleImageOnly(waNumber, sendReply, msg) {
  const session = getSession(waNumber);
 
@@ -617,18 +669,7 @@ async function handleImageOnly(waNumber, sendReply, msg) {
  // Dengan membatasi hanya di CONFIRMING, identitas pemohon sudah dipastikan valid
  // terlebih dahulu sebelum bot menerima berkas lampiran apapun.
  if (session.state !== STATE.CONFIRMING) {
- if (session.state === STATE.FILLING_FORM) {
- await sendReply(
- 'Foto belum dapat diterima saat ini.\n\n' +
- 'Silakan selesaikan pengisian formulir terlebih dahulu.\n' +
- 'Setelah email Anda terverifikasi, Anda bisa melampirkan foto sebelum mengirim tiket.'
- );
- } else {
- await sendReply(
- 'Foto hanya dapat dikirim setelah Anda mengisi formulir dan email terverifikasi.\n\n' +
- 'Ketik *menu* untuk memulai pengajuan request.'
- );
- }
+ debouncedPhotoReject(waNumber, sendReply, session.state);
  return;
  }
 
