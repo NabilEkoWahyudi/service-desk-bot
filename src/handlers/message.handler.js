@@ -149,18 +149,24 @@ setInterval(() => {
 }, 30 * 60 * 1000); // Setiap 30 menit
 
 // --- Item 1: Token Bucket Throttle (per WA) ------------------------------
+// Kapasitas 10 token: mengakomodasi pengiriman 5 foto album sekaligus (~5 token)
+// ditambah pesan balasan user (misal "OKE") tanpa terkena throttle.
+// Refill 1 token/detik: lebih responsif dari sebelumnya (1/2 detik),
+// sementara tetap membatasi pelaku spam yang mengirim secara bertubi-tubi.
+const TOKEN_BUCKET_CAPACITY = 10;
+const TOKEN_REFILL_INTERVAL_MS = 1000; // 1 token per 1 detik
 const tokenBuckets = new Map();
 function checkThrottle(waNumber) {
  const now = Date.now();
  if (!tokenBuckets.has(waNumber)) {
- tokenBuckets.set(waNumber, { tokens: 5, lastRefill: now });
+ tokenBuckets.set(waNumber, { tokens: TOKEN_BUCKET_CAPACITY, lastRefill: now });
  }
  const bucket = tokenBuckets.get(waNumber);
  const timePassed = now - bucket.lastRefill;
- const tokensToAdd = Math.floor(timePassed / 2000); // 1 token per 2 detik
+ const tokensToAdd = Math.floor(timePassed / TOKEN_REFILL_INTERVAL_MS);
  if (tokensToAdd > 0) {
- bucket.tokens = Math.min(5, bucket.tokens + tokensToAdd);
- bucket.lastRefill = now - (timePassed % 2000);
+ bucket.tokens = Math.min(TOKEN_BUCKET_CAPACITY, bucket.tokens + tokensToAdd);
+ bucket.lastRefill = now - (timePassed % TOKEN_REFILL_INTERVAL_MS);
  }
  if (bucket.tokens >= 1) {
  bucket.tokens -= 1;
@@ -448,7 +454,7 @@ async function handleAutorisasiWithApproval(session, waNumber, sendReply, rateRe
  duplicateTicketGuard.release(duplicateReservation);
  await sendReply(
  `*Request gagal dikirim ke server PLN.*\n\n` +
- `Info: Keterangan: ${result.message}\n\n` +
+ `Info: Keterangan: Kesalahan Sistem\n\n` +
  `Ketik *menu* untuk kembali ke menu utama.`
  );
  resetSession(waNumber);
@@ -604,9 +610,25 @@ async function uploadSessionMedia(requestId, session) {
 async function handleImageOnly(waNumber, sendReply, msg) {
  const session = getSession(waNumber);
 
- // Hanya terima foto jika sedang dalam state yang mendukungnya
- if (![STATE.FILLING_FORM, STATE.CONFIRMING].includes(session.state)) {
- await sendReply('Silakan pilih kategori dan isi formulir terlebih dahulu sebelum mengirim foto.');
+ // Foto hanya diterima setelah email user terverifikasi (STATE.CONFIRMING).
+ // Alasan: proses download foto membebani CPU & RAM server (dekripsi AES + Base64).
+ // Jika diterima sebelum verifikasi (FILLING_FORM), server bisa menanggung beban
+ // download dari email fiktif atau nomor asing yang iseng mengirim foto bertubi-tubi.
+ // Dengan membatasi hanya di CONFIRMING, identitas pemohon sudah dipastikan valid
+ // terlebih dahulu sebelum bot menerima berkas lampiran apapun.
+ if (session.state !== STATE.CONFIRMING) {
+ if (session.state === STATE.FILLING_FORM) {
+ await sendReply(
+ 'Foto belum dapat diterima saat ini.\n\n' +
+ 'Silakan selesaikan pengisian formulir terlebih dahulu.\n' +
+ 'Setelah email Anda terverifikasi, Anda bisa melampirkan foto sebelum mengirim tiket.'
+ );
+ } else {
+ await sendReply(
+ 'Foto hanya dapat dikirim setelah Anda mengisi formulir dan email terverifikasi.\n\n' +
+ 'Ketik *menu* untuk memulai pengajuan request.'
+ );
+ }
  return;
  }
 
@@ -947,12 +969,23 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
  const session = getSession(waNumber);
 
  if (msg?.hasMedia && msg.type === 'image') {
- if (![STATE.FILLING_FORM, STATE.CONFIRMING].includes(session.state)) {
+ if (session.state !== STATE.CONFIRMING) {
  if (!safeText) {
- await sendReply('Silakan pilih kategori dan isi formulir terlebih dahulu sebelum mengirim foto.');
+ if (session.state === STATE.FILLING_FORM) {
+ await sendReply(
+ 'Foto belum dapat diterima saat ini.\n\n' +
+ 'Silakan selesaikan pengisian formulir terlebih dahulu.\n' +
+ 'Setelah email Anda terverifikasi, Anda bisa melampirkan foto sebelum mengirim tiket.'
+ );
+ } else {
+ await sendReply(
+ 'Foto hanya dapat dikirim setelah Anda mengisi formulir dan email terverifikasi.\n\n' +
+ 'Ketik *menu* untuk memulai pengajuan request.'
+ );
+ }
  return;
  }
- // Ada teks tapi state tidak tepat untuk media - lanjutkan proses teks saja, abaikan media
+ // Ada teks tapi state belum CONFIRMING - lanjutkan proses teks saja, abaikan media
  } else {
  // -- Download Media: dua metode berurutan ---------------------------
  // Metode 1: downloadMedia() via library (Puppeteer + WA Web internal)
@@ -1406,7 +1439,7 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
  } else {
  await sendReply(
  `*Request gagal dikirim ke server PLN.*\n\n` +
- ` Keterangan: ${result.message}\n\n` +
+ `Info: Keterangan: Kesalahan Sistem\n\n` +
  `Ketik *menu* untuk kembali ke menu utama.`
  );
  }
@@ -1421,8 +1454,7 @@ async function handleMessage(waNumber, messageText, sendReply, msg = null) {
  ` *Yang bisa Anda lakukan:*\n` +
  `- Coba kirim ulang beberapa saat lagi\n` +
  `- Ketik *menu* untuk memulai dari awal\n` +
- `- Hubungi Tim IT jika masalah berlanjut\n\n` +
- `_Kode referensi: ${errRef}_`
+ `- Hubungi Tim IT jika masalah berlanjut`
  );
  }
 
